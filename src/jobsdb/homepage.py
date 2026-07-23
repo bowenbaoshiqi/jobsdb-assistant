@@ -22,33 +22,7 @@ from src.browser.ports.page_controller import PageController
 from src.simulation.behavior import HumanSimulator
 from src.storage.models import JobListing
 
-
-class HomepageScraper:
-    """首页职位抓取器"""
-
-    def __init__(self, page: PageController, human: Optional[HumanSimulator] = None):
-        self.page = page
-        self.human = human
-
-    async def get_recommended_jobs(self, max_jobs: int = 20) -> list[JobListing]:
-        """
-        抓取首页职位列表
-        """
-        logger.info("Scraping jobs from homepage...")
-        jobs = []
-
-        # 等页面动态内容加载
-        await asyncio.sleep(2)
-
-        # 快速滚动触发懒加载（不模拟完整人类浏览，先保证抓到数据）
-        for _ in range(2):
-            await self.page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            await asyncio.sleep(1)
-        await self.page.evaluate("window.scrollTo(0, 0)")
-        await asyncio.sleep(1)
-
-        # 使用 JavaScript 直接提取页面上的职位数据
-        job_data = await self.page.evaluate("""
+EXTRACTION_SCRIPT = """
             () => {
                 const jobs = [];
                 const seen = new Set();
@@ -77,7 +51,9 @@ class HomepageScraper:
                         const text = parent.textContent || '';
                         if (!company && text.includes(' at ')) {
                             const parts = text.split(' at ');
-                            if (parts.length > 1) company = parts[1].split(/[\\n·•]/)[0].trim();
+                            if (parts.length > 1) {
+                                company = parts[1].split(/[\\n·•]/)[0].trim();
+                            }
                         }
                         parent = parent.parentElement;
                     }
@@ -106,7 +82,8 @@ class HomepageScraper:
                 // 策略2：如果策略1没找到，尝试通用职位卡片
                 if (jobs.length === 0) {
                     const sel2 = (
-                        'article, [data-automation*="job-card"], [data-automation*="job-list"]'
+                        'article, [data-automation*="job-card"], '
+                        + '[data-automation*="job-list"]'
                     );
                     const cards = document.querySelectorAll(sel2);
                     cards.forEach(card => {
@@ -121,8 +98,8 @@ class HomepageScraper:
                         const label = card.getAttribute('aria-label');
                         const title = label || link.textContent.trim() || 'Unknown Job';
                         const base = 'https://hk.jobsdb.com';
-                    const path = href.split('?')[0];
-                    const url = href.startsWith('http') ? href : base + path;
+                        const path = href.split('?')[0];
+                        const url = href.startsWith('http') ? href : base + path;
 
                         jobs.push({
                             id: id,
@@ -136,7 +113,35 @@ class HomepageScraper:
 
                 return jobs;
             }
-        """)
+        """
+
+
+class HomepageScraper:
+    """首页职位抓取器"""
+
+    def __init__(self, page: PageController, human: Optional[HumanSimulator] = None):
+        self.page = page
+        self.human = human
+
+    async def get_recommended_jobs(self, max_jobs: int = 20) -> list[JobListing]:
+        """
+        抓取首页职位列表
+        """
+        logger.info("Scraping jobs from homepage...")
+        jobs = []
+
+        # 等页面动态内容加载
+        await asyncio.sleep(2)
+
+        # 快速滚动触发懒加载（不模拟完整人类浏览，先保证抓到数据）
+        for _ in range(2):
+            await self.page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await asyncio.sleep(1)
+        await self.page.evaluate("window.scrollTo(0, 0)")
+        await asyncio.sleep(1)
+
+        # 使用 JavaScript 直接提取页面上的职位数据
+        job_data = await self.page.evaluate(EXTRACTION_SCRIPT)
 
         logger.info(f"JS extraction returned {len(job_data)} raw jobs")
         if len(job_data) == 0:

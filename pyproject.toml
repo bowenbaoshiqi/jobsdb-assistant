@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "jobsdb-resume-assistant"
-version = "0.1.0"
-description = "JobsDB 简历智能投递助手 - 模拟人类行为的自动化简历投递系统"
+name = "jobsdb-assistant"
+dynamic = ["version"]
+description = "Local, human-approved AI job search and application assistant for JobsDB Hong Kong"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
@@ -41,6 +41,7 @@ dependencies = [
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
+    "pytest-cov>=7.0.0",
     "black>=23.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
@@ -52,6 +53,9 @@ jobsdb-assistant = "src.main:app"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["src*", "config*", "tests*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "src.version.__version__"}
 
 [tool.black]
 line-length = 100
@@ -78,12 +82,13 @@ markers = [
 addopts = "-m 'not e2e'"
 
 [tool.coverage.run]
+branch = true
 source = ["src"]
 # main.py 是 CLI 入口(@app.command 处理器 + rich console I/O),
 # 经手动/CLI 测试,不纳入单测覆盖率统计(其逻辑由被调模块覆盖)
 omit = ["*/tests/*", "*/__pycache__/*", "*/main.py"]
 
 [tool.coverage.report]
-# v2.0 阶段5: 起步门槛 60%(后续逐步提至 80%)
-fail_under = 60
+# v0.1.0 public release gate: combined line and branch coverage >= 80%
+fail_under = 80
 show_missing = true

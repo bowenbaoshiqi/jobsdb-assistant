@@ -13,12 +13,18 @@
   - `*.png` / 截图 - 可能包含个人信息
   - `*.log` / 日志 - 可能包含账号信息
   - `auto_apply.log` - 投递日志
+- [ ] `workspace/` 下的候选人资料、定制简历、求职信和审批记录
+- [ ] `.claude/`、`.codex/`、`.agents/` 中的本地设置（共享 skill 除外）
+- [ ] 任何位置的 `*.pdf`、`*.docx`、`*.db`、截图或真实职位报告
+- [ ] 源码和配置中形似 GitHub、OpenAI、AWS 凭证的字符串
 
 ## ✅ 可以上传的内容
 
 - 源代码 (`src/`, `config/`, `scripts/`, `tests/`)
 - 配置文件模板 (`.env.example`, `config/defaults.yaml`)
 - 文档 (`README.md`)
+- 共享工作流 skill (`.claude/skills/jobsdb-assistant/` 和
+  `.agents/skills/jobsdb-assistant/`)
 - 依赖配置 (`pyproject.toml`)
 - 示例账户文件 (`accounts/example.json` - 不含真实密码)
 
@@ -28,6 +34,9 @@
 - `.env*` - 环境变量文件
 - `data/` - 所有运行时数据
 - `accounts/` - 账户凭证（但保留 `example.json`）
+- `workspace/` - 候选人资料与生成材料
+- 常见简历、截图和数据库扩展名
+- agent 本地设置（只放行项目共享 skill）
 - `*.log` - 日志文件
 - `__pycache__/` - Python 缓存
 
@@ -52,7 +61,10 @@
    playwright install chromium
    ```
 
-4. 开始投递：
+4. 每次提交前运行自动隐私检查：
    ```bash
-   python scripts/auto_apply.py 5
+   uv run python scripts/privacy_guard.py
    ```
+
+守卫只扫描 Git 已跟踪文件，因此它是 `.gitignore` 之外的第二道防线。
+发现私有路径或疑似密钥时会返回非零退出码，适合在本地和 CI 中执行。

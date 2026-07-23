@@ -212,10 +212,15 @@ class ApplyFlow:
                 await asyncio.sleep(random.uniform(1.5, 3.0))
 
             # 超过最大步数
+            screenshot = await capture_screenshot(
+                self.page,
+                f"apply_max_steps_{job_id}",
+            )
             return ApplyResult(
                 status=ApplyStatus.FAILED,
                 job_id=job_id,
                 error_message="Max steps exceeded",
+                screenshot_path=screenshot,
             )
 
         except CaptchaDetectedError:

@@ -2,6 +2,16 @@
 
 本项目遵循 [语义化版本](https://semver.org/)。
 
+## [v0.1.0] — 2026-07-23 — Public-safe Foundation
+
+- Established the new JobsDB Assistant product version and public privacy gates.
+- Added domain contract skeletons and transactional SQLite migration tracking.
+- Added redacting environment diagnostics.
+- Raised deterministic line and branch coverage to at least 80%.
+- Preserved the upstream v2.0 Quick Apply behavior.
+
+The entries below are retained as upstream engine history.
+
 ## [v2.1.0] — 2026-07-21 — 手动登录模式 + 残留清理
 
 ### 概述
@@ -134,7 +144,7 @@ v2.0 是一次**纯重构**：投递行为与 v1.0 完全一致，无新功能�
 - 配置不变（`.env` / `accounts/` 多账户）
 - `simulation/*` 仍依赖 Playwright `Page`（Mouse 抽象超出 v2.0 范围，留待 v2.1）
 
-## [v0.1.0] — 2026-07-20 — 初始版本
+## [upstream-v0.1.0] — 2026-07-20 — 初始版本
 
 - 自动识别 Quick Apply / 快速申请按钮
 - 自动跳过普通申请（跳外部网站的职位）
