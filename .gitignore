@@ -27,6 +27,18 @@ wheels/
 
 # 数据目录（运行时数据：浏览器 profile、cookies、数据库、截图、日志）
 data/
+workspace/
+
+# 简历、求职信、截图和本地数据库不得进入公共仓库
+*.db
+*.sqlite
+*.sqlite3
+*.pdf
+*.doc
+*.docx
+*.png
+*.jpg
+*.jpeg
 
 # 调试产物（防止误写到项目根目录;data/ 内的已被 data/ 覆盖）
 debug_*.html
@@ -72,11 +84,19 @@ venv/
 .coverage
 htmlcov/
 
-# Claude Code 本地设置（可能含本地路径 / 个人偏好）
-.claude/
-
-# Skills / 技能工具（项目本地安装，非项目代码；全局副本在 ~/.claude/skills/）
-.agents/
+# Agent 本地设置默认私有；仅允许发布项目自带的共享 skill
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/jobsdb-assistant/
+!.claude/skills/jobsdb-assistant/**
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/jobsdb-assistant/
+!.agents/skills/jobsdb-assistant/**
+.codex/
+.superpowers/
 skills-lock.json
 
 # Playwright 认证

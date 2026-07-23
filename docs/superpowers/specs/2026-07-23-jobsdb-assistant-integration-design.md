@@ -512,3 +512,87 @@ The first release is complete when:
 - Apply opens the JobsDB detail page and remains a manual workflow;
 - application materials cannot introduce unsupported candidate facts;
 - automated and manual submissions record the approved material version and result.
+
+## 17. Product Version Roadmap
+
+The new repository uses its own semantic versioning beginning at `v0.1.0`. Historical
+`v2.0-phase*` tags belong to the upstream auto-apply engine and are not new-product releases.
+The existing package version `0.1.0` becomes the single initial version source; README,
+changelog, package metadata, and release tags must derive from or agree with it.
+
+| Version | Release name | Scope and release outcome |
+|---|---|---|
+| `v0.1.0` | Public-safe Foundation | Privacy baseline and CI guards; unified version source; domain skeleton; SQLite migration framework; `doctor`; existing Quick Apply behavior remains intact. |
+| `v0.2.0` | JobsDB Discovery | Fetch approximately 50 job IDs and full JDs; classify Quick Apply/Apply/unknown; immutable snapshots, hashes, incremental deduplication, expiry and duplicate-application protection. |
+| `v0.3.0` | Candidate & Evaluation | CandidateProfileAdapter onboarding and fact versioning; native JobEvaluationAdapter batch contract; scores, strengths, gaps, risks, evidence, caching and CLI report. |
+| `v0.4.0` | Review Dashboard | Local-only Dashboard; run summary; filters and detail view; first-level multi-selection; material-generation request and progress. |
+| `v0.5.0` | Tailored Materials | Native ApplicationMaterialAdapter; English CV; 100–300-word English cover letter; reviewer, PDF, ATS and factual checks; immutable package hashes. |
+| `v0.6.0` | Two-stage Approval | Material previews; approval/abandon/regenerate-with-feedback; immutable package versions; approved execution-list entries without immediate submission. |
+| `v0.7.0` | Controlled Execution | Independent per-job buttons; Quick Apply automatic execution using the approved package; Apply opens the JobsDB detail page; receipts, screenshots and manual result recording. |
+| `v0.8.0` | Recovery & Safety | Resume interrupted sessions; bounded retries; manual CAPTCHA/login recovery; semantic form answers; unknown required fields stop for review; safe Quick Apply-to-Apply downgrade. |
+| `v0.9.0` | Cross-agent Release Candidate | Canonical shared skill; equal Claude Code and Codex flows; complete setup/doctor; privacy CI; golden-job and adapter contract regression; full acceptance run. |
+| `v1.0.0` | Stable Daily Workflow | Multi-run real-world stabilization, migrations and backup, complete documentation, consistent cross-agent behavior, and auditable end-to-end release. |
+
+`v0.7.0` is the first complete product loop, `v0.9.0` is the release candidate, and
+`v1.0.0` is the first supported daily-use release.
+
+Possible post-1.0 directions, excluded from the current implementation plan:
+
+- `v1.1`: optional scheduling and notification;
+- `v1.2`: company research, contacts and follow-up;
+- `v1.3`: interview preparation and outcome learning;
+- `v2.0`: optional remote access or self-hosted multi-device deployment.
+
+Every release requires completed functionality, forward-tested migrations, passing tests and
+privacy guards, updated user/developer documentation, a changelog entry, and a signed or
+annotated release tag.
+
+## 18. Mandatory TDD Development Policy
+
+All feature, bug-fix, and refactoring work follows strict RED-GREEN-REFACTOR.
+
+### 18.1 Per-task workflow
+
+1. derive or reference a user journey and acceptance criteria;
+2. map each required behavior to unit, integration, and critical-flow E2E guarantees;
+3. write the smallest relevant test before production changes;
+4. execute it and capture a valid RED caused by the missing or incorrect behavior;
+5. create a RED checkpoint commit reachable from the active task branch;
+6. implement only the minimum production change required for GREEN;
+7. rerun the same target, validate GREEN, and create the GREEN checkpoint commit;
+8. refactor only while the suite remains GREEN, with an optional refactor checkpoint;
+9. run lint, type checks, the full deterministic suite, and coverage;
+10. write a factual TDD evidence report under `docs/testing/`.
+
+Production code must not be changed before a valid RED result. A syntax, dependency, fixture,
+or environment failure is not valid RED evidence.
+
+### 18.2 Coverage and test layers
+
+- Global line and branch coverage must be at least 80% for every new-product release.
+- New or materially changed domain/application modules target at least 90%.
+- Unit tests cover pure rules, contracts, state transitions, boundaries and errors.
+- Integration tests cover SQLite migrations/repositories, Dashboard APIs and adapter wrappers.
+- Deterministic E2E tests cover the critical user flows with Fake PageController, synthetic
+  data and controlled browser fixtures.
+- Live JobsDB E2E remains opt-in because it requires a real account and manual login, but every
+  behavior it guards must also have a deterministic CI-safe test where technically possible.
+- No disabled or skipped deterministic test is accepted as release evidence.
+
+The current 60% coverage floor is legacy. `v0.1.0` raises and validates the project threshold
+to 80% before feature releases proceed.
+
+### 18.3 Evidence and Git history
+
+For each roadmap task, preserve:
+
+- plan task and user-journey reference;
+- test target;
+- actual RED command and relevant failure;
+- actual GREEN command and result;
+- coverage command and result;
+- RED/GREEN/refactor commit IDs;
+- known gaps, including any manual-only live JobsDB check.
+
+Checkpoint commits are not squashed until their evidence is copied into the evidence report
+and pull-request or release record. Tests and reports use synthetic candidate/job data only.

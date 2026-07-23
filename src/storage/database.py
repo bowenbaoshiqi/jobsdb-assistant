@@ -5,6 +5,7 @@ from typing import Optional
 
 from loguru import logger
 
+from src.storage.migrations import Migration, MigrationRunner
 from src.storage.models import (
     ApplyResult,
     ApplyStatus,
@@ -14,6 +15,10 @@ from src.storage.models import (
 )
 
 
+def _mark_legacy_schema(_conn: sqlite3.Connection) -> None:
+    """Version marker: legacy tables are created by Database._init_tables."""
+
+
 class Database:
     """SQLite 数据库操作（多账户隔离）"""
 
@@ -21,6 +26,9 @@ class Database:
         self.db_path = db_path
         self.account_alias: Optional[str] = None
         self._init_tables()
+        MigrationRunner(self.db_path).apply(
+            [Migration(1, "legacy v2 schema baseline", _mark_legacy_schema)]
+        )
 
     @contextmanager
     def _connect(self):

@@ -16,14 +16,17 @@ from rich.table import Table
 
 from config.settings import get_config
 from src.accounts.registry import Account, AccountRegistry
+from src.doctor import CheckStatus, run_checks
 from src.monitor.logger import configure_logger
 from src.orchestrator import Orchestrator
 from src.storage.database import Database
+from src.version import __version__
 
 app = typer.Typer(
     name="jobsdb-assistant",
     help="JobsDB 简历智能投递助手",
     no_args_is_help=True,
+    invoke_without_command=True,
 )
 
 account_app = typer.Typer(help="多账户管理器")
@@ -35,8 +38,18 @@ console = Console()
 @app.callback()
 def main(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="显示详细日志"),
+    version: bool = typer.Option(
+        False,
+        "--version",
+        is_eager=True,
+        help="显示版本并退出",
+    ),
 ):
-    """JobsDB 简历智能投递助手"""
+    """JobsDB Assistant."""
+    if version:
+        console.print(f"jobsdb-assistant {__version__}", markup=False)
+        raise typer.Exit()
+
     config = get_config()
 
     # Configure logs
@@ -47,6 +60,26 @@ def main(
         log_rotation=config.monitoring.log_rotation,
         log_retention=config.monitoring.log_retention,
     )
+
+
+@app.command()
+def doctor() -> None:
+    """检查本机运行环境，不输出凭证或私有路径。"""
+    results = run_checks()
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("检查项")
+    table.add_column("状态")
+    table.add_column("详情")
+    icons = {
+        CheckStatus.PASS: "[green]PASS[/green]",
+        CheckStatus.WARN: "[yellow]WARN[/yellow]",
+        CheckStatus.FAIL: "[red]FAIL[/red]",
+    }
+    for result in results:
+        table.add_row(result.name, icons[result.status], result.detail)
+    console.print(table)
+    if any(result.status is CheckStatus.FAIL for result in results):
+        raise typer.Exit(code=1)
 
 
 @app.command()
