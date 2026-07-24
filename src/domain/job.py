@@ -12,6 +12,12 @@ class ApplyType(str, Enum):
     UNKNOWN = "unknown"
 
 
+class DiscoveryPersistenceState(str, Enum):
+    NEW = "new"
+    UNCHANGED = "unchanged"
+    CHANGED = "changed"
+
+
 class Job(BaseModel):
     jobsdb_job_id: str = Field(min_length=1)
     canonical_url: str

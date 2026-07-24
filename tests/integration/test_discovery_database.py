@@ -7,6 +7,7 @@ from src.domain.job import (
     JobDetailCapture,
 )
 from src.storage.database import Database
+from src.storage.models import JobListing
 
 
 def capture(
@@ -115,3 +116,20 @@ def test_discovery_migration_is_applied_once(tmp_path) -> None:
         "is_active",
         "inactive_reason",
     } <= columns
+
+
+def test_legacy_save_job_preserves_discovery_snapshot(tmp_path) -> None:
+    db = Database(str(tmp_path / "jobs.db"))
+    db.save_discovered_job(capture())
+
+    db.save_job(
+        JobListing(
+            id="123",
+            title="Updated listing title",
+            company="Synthetic Ltd",
+            url="https://hk.jobsdb.com/job/123",
+        )
+    )
+
+    assert db.get_job_snapshot_count("123") == 1
+    assert db.get_current_job_snapshot("123") is not None
