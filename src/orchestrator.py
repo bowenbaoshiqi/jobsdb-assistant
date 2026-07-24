@@ -25,6 +25,7 @@ from src.jobsdb.exceptions import (
 from src.jobsdb.homepage import HomepageScraper
 from src.jobsdb.job_detail import JobDetailPage
 from src.jobsdb.login import LoginHandler
+from src.jobsdb.search import build_search_url, normalize_keyword
 from src.simulation.behavior import HumanSimulator
 from src.storage.models import ApplyResult, ApplyStatus, JobListing, SessionStatus
 from src.utils.screenshot import capture_screenshot, generate_session_id
@@ -82,6 +83,73 @@ class Orchestrator:
         self.jobs_succeeded = 0
         self.consecutive_failures = 0
         self.detection_suspected = False
+
+    async def discover(self, keyword: str, limit: int = 50) -> dict:
+        """Discover and persist JobsDB jobs without applying to them."""
+        normalized_keyword = normalize_keyword(keyword)
+        try:
+            await self._init_browser()
+            if not await self._ensure_login():
+                return {
+                    "keyword": normalized_keyword,
+                    "error": "login_failed",
+                }
+            return await self._discover_loaded(normalized_keyword, limit)
+        except Exception:
+            logger.exception("JobsDB discovery failed")
+            return {
+                "keyword": normalized_keyword,
+                "error": "discovery_failed",
+            }
+        finally:
+            await self._cleanup()
+
+    async def _discover_loaded(self, keyword: str, limit: int) -> dict:
+        """Run discovery after browser and login initialization."""
+        await self.page_controller.goto(build_search_url(keyword))
+        jobs = await self.scraper.get_search_jobs(max_jobs=limit)
+        report = {
+            "keyword": keyword,
+            "found": len(jobs),
+            "captured": 0,
+            "new": 0,
+            "unchanged": 0,
+            "changed": 0,
+            "apply_types": {
+                "quick_apply": 0,
+                "apply": 0,
+                "unknown": 0,
+            },
+            "failures": [],
+        }
+
+        for job in jobs:
+            canonical_url = job.url or f"https://hk.jobsdb.com/job/{job.id}"
+            detail = JobDetailPage(
+                self.page_controller,
+                canonical_url,
+                self.human,
+            )
+            try:
+                await detail.navigate_with_simulation()
+                capture = await detail.capture_for_discovery(
+                    job_id=job.id,
+                    canonical_url=canonical_url,
+                )
+                state = self.db.save_discovered_job(capture)
+            except Exception:
+                logger.exception("Failed to capture discovered job {}", job.id)
+                report["failures"].append({
+                    "job_id": job.id,
+                    "reason": "detail_capture_failed",
+                })
+                continue
+
+            report["captured"] += 1
+            report[state.value] += 1
+            report["apply_types"][capture.apply_type.value] += 1
+
+        return report
 
     async def run(self, job_ids: Optional[list[str]] = None) -> dict:
         """
