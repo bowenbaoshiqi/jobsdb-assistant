@@ -62,6 +62,10 @@ class CheckpointStore:
         temporary.replace(path)
         return CheckpointRef(path=path, sha256=sha256(payload).hexdigest())
 
+    def read_task(self, task_id: str) -> dict[str, Any]:
+        path = self._task_dir(task_id) / "task.json"
+        return json.loads(path.read_text(encoding="utf-8"))
+
     def read_result(self, task_id: str) -> dict[str, Any]:
         path = self._task_dir(task_id) / "result.json"
         return json.loads(path.read_text(encoding="utf-8"))

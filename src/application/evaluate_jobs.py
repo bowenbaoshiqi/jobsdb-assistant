@@ -121,3 +121,16 @@ class EvaluationService:
         result = results[0]
         self.evaluations.save(result, pending.cache_key)
         return result
+
+    def load_pending(self, task_id: str) -> PendingEvaluation:
+        task = JobEvaluationTask.model_validate(
+            self.checkpoints.read_task(task_id)
+        )
+        if len(task.snapshots) != 1:
+            raise ValueError("v0.3 evaluation task must contain one snapshot")
+        snapshot = task.snapshots[0]
+        return PendingEvaluation(
+            snapshot_id=snapshot.snapshot_id,
+            task=task,
+            cache_key=self.cache_key(task.profile, snapshot),
+        )
