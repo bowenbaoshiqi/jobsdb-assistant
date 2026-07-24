@@ -70,7 +70,11 @@ NEXT_PAGE_BUTTON = 'a[rel="next"], button:has-text("Next")'
 
 # 职位标题和公司
 JOB_DETAIL_TITLE = 'h1[data-automation="job-detail-title"], h1[class*="job-title"]'
-JOB_DETAIL_COMPANY = '[data-automation="job-detail-company"], [class*="company-detail"]'
+JOB_DETAIL_COMPANY = (
+    '[data-automation="advertiser-name"], '
+    '[data-automation="job-detail-company"], '
+    '[class*="company-detail"]'
+)
 JOB_DETAIL_LOCATION = '[data-automation="job-detail-location"], [class*="job-location"]'
 JOB_DETAIL_SALARY = '[data-automation="job-detail-salary"], [class*="salary-detail"]'
 
