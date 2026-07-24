@@ -1,5 +1,6 @@
 import hashlib
 import sqlite3
+import uuid
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Optional
@@ -74,8 +75,23 @@ class Database:
     def __init__(self, db_path: str = "./data/jobsdb.db"):
         self.db_path = db_path
         self.account_alias: Optional[str] = None
+        self._connection_target = db_path
+        self._connection_is_uri = False
+        self._memory_keeper: Optional[sqlite3.Connection] = None
+        if db_path == ":memory:":
+            self._connection_target = (
+                f"file:jobsdb_{uuid.uuid4().hex}?mode=memory&cache=shared"
+            )
+            self._connection_is_uri = True
+            self._memory_keeper = sqlite3.connect(
+                self._connection_target,
+                uri=True,
+            )
         self._init_tables()
-        MigrationRunner(self.db_path).apply(
+        MigrationRunner(
+            self._connection_target,
+            uri=self._connection_is_uri,
+        ).apply(
             [
                 Migration(1, "legacy v2 schema baseline", _mark_legacy_schema),
                 Migration(2, "v0.2 discovery schema", _add_discovery_schema),
@@ -84,7 +100,10 @@ class Database:
 
     @contextmanager
     def _connect(self):
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(
+            self._connection_target,
+            uri=self._connection_is_uri,
+        )
         conn.row_factory = sqlite3.Row
         try:
             yield conn

@@ -17,8 +17,9 @@ class Migration:
 
 
 class MigrationRunner:
-    def __init__(self, database_path: str):
+    def __init__(self, database_path: str, *, uri: bool = False):
         self.database_path = database_path
+        self.uri = uri
 
     def apply(self, migrations: Sequence[Migration]) -> list[int]:
         versions = [migration.version for migration in migrations]
@@ -29,7 +30,7 @@ class MigrationRunner:
             raise ValueError(f"duplicate migration version: {duplicates[0]}")
 
         applied: list[int] = []
-        with closing(sqlite3.connect(self.database_path)) as conn:
+        with closing(sqlite3.connect(self.database_path, uri=self.uri)) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS schema_migrations (
                     version INTEGER PRIMARY KEY,
