@@ -8,6 +8,7 @@ from typing import Optional
 from loguru import logger
 
 from src.domain.job import (
+    CurrentSnapshotRecord,
     DiscoveryPersistenceState,
     JobDetailCapture,
     JobSnapshot,
@@ -374,6 +375,42 @@ class Database:
                 captured_at=datetime.fromisoformat(row["captured_at"]),
                 is_active=bool(row["is_active"]),
             )
+
+    def get_current_job_snapshot_record(
+        self,
+        job_id: str,
+    ) -> Optional[CurrentSnapshotRecord]:
+        """Return the current JD plus listing metadata for evaluation."""
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT
+                    s.id AS snapshot_id,
+                    s.job_id,
+                    j.title,
+                    j.company,
+                    j.url AS canonical_url,
+                    j.apply_type,
+                    s.jd_text,
+                    s.content_hash
+                FROM jobs j
+                JOIN job_snapshots s ON s.id = j.current_snapshot_id
+                WHERE j.id = ?
+                """,
+                (job_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return CurrentSnapshotRecord(
+            snapshot_id=str(row["snapshot_id"]),
+            job_id=row["job_id"],
+            title=row["title"],
+            company=row["company"],
+            canonical_url=row["canonical_url"],
+            apply_type=row["apply_type"],
+            jd_text=row["jd_text"],
+            content_hash=row["content_hash"],
+        )
 
     def mark_job_inactive(self, job_id: str, reason: str) -> None:
         with self._connect() as conn:

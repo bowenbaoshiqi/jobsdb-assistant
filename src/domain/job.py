@@ -48,3 +48,16 @@ class JobDetailCapture(BaseModel):
     location: str | None = None
     jd_text: str = Field(min_length=1)
     apply_type: ApplyType
+
+
+class CurrentSnapshotRecord(BaseModel):
+    """Current persisted JD with metadata required for evaluation."""
+
+    snapshot_id: str
+    job_id: str
+    title: str
+    company: str
+    canonical_url: str
+    apply_type: ApplyType
+    jd_text: str
+    content_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
