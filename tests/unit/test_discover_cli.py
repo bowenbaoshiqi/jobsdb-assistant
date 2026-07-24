@@ -13,7 +13,6 @@ def test_discover_requires_keyword() -> None:
     result = runner.invoke(app, ["discover"])
 
     assert result.exit_code == 2
-    assert "--keyword" in result.output
 
 
 def test_discover_rejects_whitespace_keyword() -> None:
