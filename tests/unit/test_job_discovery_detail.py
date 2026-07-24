@@ -37,6 +37,10 @@ def test_company_selector_supports_current_advertiser_name_dom() -> None:
     assert '[data-automation="advertiser-name"]' in JOB_DETAIL_COMPANY
 
 
+def test_description_selector_supports_current_job_ad_details_dom() -> None:
+    assert '[data-automation="jobAdDetails"]' in JOB_DESCRIPTION
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("button_text", "expected"),
