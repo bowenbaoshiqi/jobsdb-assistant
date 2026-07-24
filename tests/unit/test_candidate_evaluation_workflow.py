@@ -59,7 +59,7 @@ def workflow(tmp_path: Path):
     integrations = FakeIntegrationManager(tmp_path / "integrations")
     onboarding = CandidateOnboarding(
         profiles,
-        CandidateProfileAdapter("a" * 40, "candidate-profile.v1"),
+        CandidateProfileAdapter("a" * 40, "candidate-profile.v2"),
         checkpoints,
     )
     evaluation_service = EvaluationService(
