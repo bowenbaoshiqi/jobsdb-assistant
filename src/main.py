@@ -4,8 +4,10 @@ CLI entry point
 Provides command line interface for controlling the job application assistant.
 """
 
+import json
 import os
 import shutil
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Optional
 
@@ -32,8 +34,139 @@ app = typer.Typer(
 
 account_app = typer.Typer(help="多账户管理器")
 app.add_typer(account_app, name="account")
+workflow_app = typer.Typer(help="候选人画像与职位评分工作流")
+app.add_typer(workflow_app, name="workflow")
 
 console = Console()
+
+
+def _build_candidate_evaluation_workflow():
+    from src.application.runtime import build_workflow
+
+    return build_workflow()
+
+
+def _print_json(payload: dict) -> None:
+    typer.echo(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+
+
+def _onboarding_payload(outcome) -> dict:
+    return {
+        "status": outcome.status.value,
+        "profile_version": outcome.profile_version,
+        "task_id": outcome.task_id,
+        "proposal_id": outcome.proposal_id,
+        "questions": list(outcome.questions),
+    }
+
+
+@workflow_app.command("profile-prepare")
+def workflow_profile_prepare(
+    run_id: str = typer.Option(..., "--run-id"),
+    source: list[Path] = typer.Option([], "--source"),  # noqa: B008
+    update: bool = typer.Option(False, "--update"),
+) -> None:
+    """复用现有画像，或创建一个受控画像 AI 任务。"""
+    workflow = _build_candidate_evaluation_workflow()
+    outcome = workflow.prepare_profile(
+        run_id,
+        [str(path) for path in source],
+        update=update,
+    )
+    _print_json(_onboarding_payload(outcome))
+
+
+@workflow_app.command("profile-submit")
+def workflow_profile_submit(
+    run_id: str = typer.Option(..., "--run-id"),
+    task_id: str = typer.Option(..., "--task-id"),
+    result: Path = typer.Option(..., "--result"),  # noqa: B008
+) -> None:
+    """校验 Agent 返回的画像问题或提案。"""
+    payload = json.loads(result.read_text(encoding="utf-8"))
+    outcome = _build_candidate_evaluation_workflow().submit_profile_result(
+        run_id,
+        task_id,
+        payload,
+    )
+    _print_json(_onboarding_payload(outcome))
+
+
+@workflow_app.command("profile-answers")
+def workflow_profile_answers(
+    run_id: str = typer.Option(..., "--run-id"),
+    answers: Path = typer.Option(..., "--answers"),  # noqa: B008
+    source: list[Path] = typer.Option([], "--source"),  # noqa: B008
+) -> None:
+    """提交补充访谈答案并创建下一画像任务。"""
+    payload = json.loads(answers.read_text(encoding="utf-8"))
+    outcome = _build_candidate_evaluation_workflow().submit_profile_answers(
+        run_id,
+        [str(path) for path in source],
+        payload,
+    )
+    _print_json(_onboarding_payload(outcome))
+
+
+@workflow_app.command("profile-confirm")
+def workflow_profile_confirm(
+    proposal_id: str = typer.Option(..., "--proposal-id"),
+) -> None:
+    """显式确认画像提案并创建不可变版本。"""
+    profile = _build_candidate_evaluation_workflow().confirm_profile(
+        proposal_id,
+        confirmed_at=datetime.now(UTC),
+    )
+    _print_json({
+        "status": "confirmed",
+        "profile_id": profile.id,
+        "profile_version": profile.version,
+    })
+
+
+@workflow_app.command("evaluation-prepare")
+def workflow_evaluation_prepare(
+    run_id: str = typer.Option(..., "--run-id"),
+) -> None:
+    """为当前未缓存 JobsDB JD 创建原生评分任务。"""
+    plan = _build_candidate_evaluation_workflow().prepare_evaluations(run_id)
+    _print_json({
+        "cached": len(plan.cached),
+        "pending": [
+            {
+                "snapshot_id": item.snapshot_id,
+                "task_id": item.task.task_id,
+            }
+            for item in plan.pending
+        ],
+    })
+
+
+@workflow_app.command("evaluation-submit")
+def workflow_evaluation_submit(
+    task_id: str = typer.Option(..., "--task-id"),
+    result: Path = typer.Option(..., "--result"),  # noqa: B008
+) -> None:
+    """校验并保存一个 career-ops 原生评分结果。"""
+    payload = json.loads(result.read_text(encoding="utf-8"))
+    evaluation = (
+        _build_candidate_evaluation_workflow().submit_evaluation_result(
+            task_id,
+            payload,
+        )
+    )
+    _print_json({
+        "status": "saved",
+        "evaluation_id": evaluation.id,
+        "snapshot_id": evaluation.job_snapshot_id,
+        "overall_score": evaluation.overall_score,
+    })
+
+
+@workflow_app.command("report")
+def workflow_report() -> None:
+    """输出当前画像版本对应的完整评分报告。"""
+    typer.echo(_build_candidate_evaluation_workflow().report())
 
 
 @app.callback()

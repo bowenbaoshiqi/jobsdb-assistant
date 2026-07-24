@@ -93,6 +93,18 @@ class CandidateEvaluationWorkflow:
             payload,
         )
 
+    def submit_profile_answers(
+        self,
+        run_id: str,
+        source_documents: list[str],
+        answers: dict[str, str],
+    ) -> OnboardingOutcome:
+        return self.onboarding.submit_answers(
+            run_id,
+            source_documents,
+            answers,
+        )
+
     def confirm_profile(
         self,
         proposal_id: str,
