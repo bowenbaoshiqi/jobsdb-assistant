@@ -2,6 +2,22 @@
 
 本项目遵循 [语义化版本](https://semver.org/)。
 
+## [v0.3.0] — 2026-07-24 — Candidate & Evaluation
+
+- Added fixed-SHA public-fork integration locks for ai-job-search and
+  career-ops without modifying either fork.
+- Added evidence-backed candidate onboarding proposals, explicit confirmation,
+  immutable profile versions, and normal-run profile reuse.
+- Added native career-ops ordered A–F evaluation with its original 1.0–5.0
+  overall score and no score fusion or custom weighting.
+- Added exact incremental evaluation caching over JD, profile, engine, and
+  contract hashes.
+- Added private atomic JSON checkpoints serviced by the active Claude Code or
+  Codex session.
+- Added a Python-controlled workflow CLI and safe local evaluation report.
+- Kept material generation, Dashboard review, and application execution out of
+  the evaluation workflow.
+
 ## [v0.1.0] — 2026-07-23 — Public-safe Foundation
 
 - Established the new JobsDB Assistant product version and public privacy gates.
