@@ -33,6 +33,10 @@ def test_normalize_jd_text_standardizes_spacing() -> None:
     assert normalize_jd_text(raw) == "Role\n\nBuild products"
 
 
+def test_company_selector_supports_current_advertiser_name_dom() -> None:
+    assert '[data-automation="advertiser-name"]' in JOB_DETAIL_COMPANY
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("button_text", "expected"),
