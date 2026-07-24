@@ -30,3 +30,15 @@ class JobSnapshot(BaseModel):
     content_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
     captured_at: datetime
     is_active: bool = True
+
+
+class JobDetailCapture(BaseModel):
+    """Normalized job detail captured during discovery."""
+
+    jobsdb_job_id: str = Field(min_length=1)
+    canonical_url: str
+    title: str = Field(min_length=1)
+    company: str = Field(min_length=1)
+    location: str | None = None
+    jd_text: str = Field(min_length=1)
+    apply_type: ApplyType
