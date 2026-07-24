@@ -13,6 +13,11 @@ from src.adapters.candidate_profile import (
 )
 from src.adapters.checkpoint_io import CheckpointStore
 from src.domain.candidate import CandidateProfile
+from src.domain.candidate_interview import (
+    InterviewAnswer,
+    InterviewDimension,
+    InterviewQuestion,
+)
 from src.storage.candidate_repository import CandidateRepository
 
 
@@ -29,7 +34,7 @@ class OnboardingOutcome:
     profile_version: int | None = None
     task_id: str | None = None
     proposal_id: str | None = None
-    questions: tuple[str, ...] = ()
+    questions: tuple[InterviewQuestion, ...] = ()
 
 
 class CandidateOnboarding:
@@ -71,7 +76,7 @@ class CandidateOnboarding:
         self,
         run_id: str,
         source_documents: list[str],
-        answers: dict[str, str],
+        answers: dict[InterviewDimension, InterviewAnswer],
     ) -> OnboardingOutcome:
         suffix = "-answers" if answers else ""
         task = self.adapter.build_task(
@@ -95,8 +100,11 @@ class CandidateOnboarding:
         payload: dict,
     ) -> OnboardingOutcome:
         encoded = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        task = self.adapter.validate_task(
+            self.checkpoints.read_task(task_id)
+        )
+        result = self.adapter.validate_result(payload, task=task)
         self.checkpoints.submit_result(task_id, encoded)
-        result = self.adapter.validate_result(payload)
         if isinstance(result, ProfileQuestions):
             return OnboardingOutcome(
                 status=OnboardingStatus.NEEDS_ANSWERS,
@@ -116,9 +124,14 @@ class CandidateOnboarding:
         self,
         run_id: str,
         source_documents: list[str],
-        answers: dict[str, str],
+        answers: dict,
     ) -> OnboardingOutcome:
-        return self._create_task(run_id, source_documents, answers)
+        validated = self.adapter.validate_answers(answers)
+        return self._create_task(
+            run_id,
+            source_documents,
+            validated,
+        )
 
     def confirm(
         self,

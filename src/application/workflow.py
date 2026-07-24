@@ -97,7 +97,7 @@ class CandidateEvaluationWorkflow:
         self,
         run_id: str,
         source_documents: list[str],
-        answers: dict[str, str],
+        answers: dict,
     ) -> OnboardingOutcome:
         return self.onboarding.submit_answers(
             run_id,
