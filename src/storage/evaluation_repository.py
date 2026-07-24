@@ -54,3 +54,24 @@ class EvaluationRepository:
         if row is None:
             return None
         return JobEvaluation.model_validate_json(row["payload_json"])
+
+    def list_current(self, profile_version: int) -> list[JobEvaluation]:
+        """Return latest evaluations for active current JD snapshots."""
+        with self.database._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT e.job_snapshot_id, e.payload_json
+                FROM job_evaluations e
+                JOIN jobs j ON j.current_snapshot_id = e.job_snapshot_id
+                WHERE j.is_active = 1 AND e.profile_version = ?
+                ORDER BY e.created_at DESC, e.id DESC
+                """,
+                (profile_version,),
+            ).fetchall()
+        current: dict[int, JobEvaluation] = {}
+        for row in rows:
+            current.setdefault(
+                row["job_snapshot_id"],
+                JobEvaluation.model_validate_json(row["payload_json"]),
+            )
+        return list(current.values())

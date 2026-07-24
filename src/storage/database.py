@@ -412,6 +412,42 @@ class Database:
             content_hash=row["content_hash"],
         )
 
+    def list_current_snapshot_records(
+        self,
+    ) -> list[CurrentSnapshotRecord]:
+        """List active current JDs in deterministic job order."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    s.id AS snapshot_id,
+                    s.job_id,
+                    j.title,
+                    j.company,
+                    j.url AS canonical_url,
+                    j.apply_type,
+                    s.jd_text,
+                    s.content_hash
+                FROM jobs j
+                JOIN job_snapshots s ON s.id = j.current_snapshot_id
+                WHERE j.is_active = 1
+                ORDER BY j.id
+                """
+            ).fetchall()
+        return [
+            CurrentSnapshotRecord(
+                snapshot_id=str(row["snapshot_id"]),
+                job_id=row["job_id"],
+                title=row["title"],
+                company=row["company"],
+                canonical_url=row["canonical_url"],
+                apply_type=row["apply_type"],
+                jd_text=row["jd_text"],
+                content_hash=row["content_hash"],
+            )
+            for row in rows
+        ]
+
     def mark_job_inactive(self, job_id: str, reason: str) -> None:
         with self._connect() as conn:
             conn.execute(
