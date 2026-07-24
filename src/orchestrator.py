@@ -89,11 +89,6 @@ class Orchestrator:
         normalized_keyword = normalize_keyword(keyword)
         try:
             await self._init_browser()
-            if not await self._ensure_login():
-                return {
-                    "keyword": normalized_keyword,
-                    "error": "login_failed",
-                }
             return await self._discover_loaded(normalized_keyword, limit)
         except Exception:
             logger.exception("JobsDB discovery failed")

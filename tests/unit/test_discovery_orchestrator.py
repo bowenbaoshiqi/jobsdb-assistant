@@ -149,17 +149,15 @@ async def test_public_discover_never_invokes_login() -> None:
 
 
 @pytest.mark.asyncio
-async def test_discover_login_failure_cleans_up(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_public_discover_failure_cleans_up() -> None:
     orchestrator = make_orchestrator()
-    monkeypatch.setattr(
-        orchestrator,
-        "_ensure_login",
-        AsyncMock(return_value=False),
+    orchestrator._init_browser = AsyncMock()
+    orchestrator._discover_loaded = AsyncMock(
+        side_effect=RuntimeError("public page unavailable"),
     )
+    orchestrator._cleanup = AsyncMock()
 
     report = await orchestrator.discover("Product Manager")
 
-    assert report["error"] == "login_failed"
-    assert orchestrator.factory.last_browser.current_page is None
+    assert report["error"] == "discovery_failed"
+    orchestrator._cleanup.assert_awaited_once()

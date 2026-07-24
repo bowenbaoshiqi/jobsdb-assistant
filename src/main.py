@@ -231,13 +231,8 @@ def discover(
         "-k",
         help="单一 JobsDB 搜索关键词（地区默认为香港）",
     ),
-    login_mode: Optional[str] = typer.Option(
-        None,
-        "--login-mode",
-        help="登录模式: auto / manual；覆盖 config.login.mode",
-    ),
 ) -> None:
-    """发现并保存 JobsDB 香港职位，不执行投递。"""
+    """从公开页面发现并保存 JobsDB 香港职位，不登录、不投递。"""
     try:
         normalized_keyword = normalize_keyword(keyword)
     except ValueError as exc:
@@ -247,14 +242,10 @@ def discover(
         ) from exc
 
     config = get_config()
-    if login_mode:
-        config.login.mode = login_mode
-    if config.login.mode == "manual":
-        config.browser.headless = False
-    registry = AccountRegistry()
-    resolved = registry.resolve_active(
-        None,
-        allow_placeholder=(config.login.mode == "manual"),
+    resolved = Account(
+        alias="public-discovery",
+        email="",
+        password="",
     )
 
     import asyncio
