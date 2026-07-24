@@ -130,6 +130,14 @@ def test_native_evaluation_requires_ordered_a_through_f_once() -> None:
             }
         )
 
+    with pytest.raises(ValidationError, match="A through F"):
+        JobEvaluation(
+            **{
+                **evaluation.model_dump(),
+                "dimensions": [],
+            }
+        )
+
 
 def test_application_package_requires_english_cover_letter_word_range() -> None:
     resume = MaterialArtifact(
