@@ -6,6 +6,15 @@ from src.domain.candidate import (
     CandidateProfileProposal,
     FactEvidence,
 )
+from src.domain.candidate_interview import (
+    OPTIONAL_INTERVIEW_DIMENSIONS,
+    REQUIRED_INTERVIEW_DIMENSIONS,
+    InterviewAnswer,
+    InterviewAnswerStatus,
+    InterviewAnswers,
+    InterviewDimension,
+    InterviewQuestion,
+)
 from src.domain.evaluation import (
     EvaluationCacheKey,
     JobEvaluation,
@@ -22,9 +31,16 @@ __all__ = [
     "CandidateProfileProposal",
     "EvaluationCacheKey",
     "FactEvidence",
+    "InterviewAnswer",
+    "InterviewAnswerStatus",
+    "InterviewAnswers",
+    "InterviewDimension",
+    "InterviewQuestion",
     "Job",
     "JobEvaluation",
     "JobSnapshot",
     "MaterialArtifact",
     "NativeDimension",
+    "OPTIONAL_INTERVIEW_DIMENSIONS",
+    "REQUIRED_INTERVIEW_DIMENSIONS",
 ]
