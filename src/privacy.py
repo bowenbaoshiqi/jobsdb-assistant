@@ -57,6 +57,8 @@ def _private_path_reason(path: str) -> str | None:
 
     if parts[0] in _PRIVATE_ROOTS:
         return "private runtime path"
+    if parts[0] == "integrations" and normalized != "integrations/manifest.json":
+        return "private integration checkout"
     if parts[:2] == ("playwright", ".auth"):
         return "private runtime path"
     if parts[0] == "accounts" and normalized not in {

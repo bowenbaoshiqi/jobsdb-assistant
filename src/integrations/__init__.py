@@ -1,5 +1,9 @@
 """Pinned external integration contracts."""
 
+from src.integrations.manager import (
+    IntegrationManager,
+    IntegrationState,
+)
 from src.integrations.manifest import (
     IntegrationManifest,
     IntegrationSpec,
@@ -7,7 +11,9 @@ from src.integrations.manifest import (
 )
 
 __all__ = [
+    "IntegrationManager",
     "IntegrationManifest",
     "IntegrationSpec",
+    "IntegrationState",
     "load_manifest",
 ]
