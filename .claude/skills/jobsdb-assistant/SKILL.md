@@ -32,5 +32,8 @@ and cannot return a proposal. Collect dimension-keyed structured answers,
 including explicit skip statuses when chosen by the user, then service the
 follow-up task.
 
+JobsDB discovery is public browser navigation and never uses credentials or
+login. Do not request password configuration during discovery.
+
 Do not modify integration checkouts, update fork revisions, combine scoring
 systems, create application materials, or run application execution.

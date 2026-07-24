@@ -18,6 +18,8 @@
 - Added private atomic JSON checkpoints serviced by the active Claude Code or
   Codex session.
 - Added a Python-controlled workflow CLI and safe local evaluation report.
+- Corrected public JobsDB discovery so it never resolves credentials or calls
+  the login flow; authentication remains exclusive to application execution.
 - Kept material generation, Dashboard review, and application execution out of
   the evaluation workflow.
 

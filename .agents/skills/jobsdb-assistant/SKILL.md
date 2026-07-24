@@ -98,6 +98,9 @@ requires source evidence. Never convert silence into a preference.
 ## 2. Discover JobsDB roles
 
 Ask for one keyword if none was supplied. Location remains Hong Kong.
+Discovery uses the public JobsDB pages. It never requires an account, login,
+email, password, or `JOBSDB_EMAIL` / `JOBSDB_PASSWORD`. Do not ask the user to
+configure credentials for this stage.
 
 ```bash
 uv run python -m src.main discover --keyword "KEYWORD"

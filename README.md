@@ -26,12 +26,12 @@ uv run jobsdb-assistant doctor
 
 ```bash
 uv run jobsdb-assistant discover \
-  --keyword "Product Manager" \
-  --login-mode manual
+  --keyword "Product Manager"
 ```
 
-地区固定为香港，其他搜索筛选使用 JobsDB 默认值。首次运行可以在打开的浏览器
-中手动登录；命令只抓取并保存职位，不会进入申请状态机，也不会提交申请。
+地区固定为香港，其他搜索筛选使用 JobsDB 默认值。命令直接打开公开 JobsDB
+页面抓取并保存职位，不读取账户、不登录、不要求邮箱或密码，也不会进入申请
+状态机或提交申请。
 
 ### 3. 在 Claude Code 或 Codex 中生成画像并评分
 
@@ -149,6 +149,7 @@ uv run python scripts/privacy_guard.py
 ### v0.2.0 (2026-07-24) — JobsDB Discovery
 
 - 单一关键词搜索，地区默认为香港，每次最多收集 50 个唯一职位
+- 公开浏览器发现流程与账户、密码和登录完全隔离
 - 复用现有抓取器的滚动能力，以达到上限或连续无新增为停止条件
 - 保存完整 JD，并分类为 `Quick Apply`、`Apply` 或 `unknown`
 - SHA-256 不可变 JD 快照，支持新增、未变化和内容变更检测
