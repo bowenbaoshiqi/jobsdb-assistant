@@ -127,3 +127,15 @@ def test_submit_persists_one_native_result(tmp_path: Path) -> None:
 
     assert saved == result
     assert repo.find_by_cache_key(task.cache_key) == result
+
+
+def test_pending_task_can_be_reloaded_after_agent_checkpoint(
+    tmp_path: Path,
+) -> None:
+    evaluator = service(tmp_path, FakeEvaluationRepository())
+    plan = evaluator.plan("run-1", profile(), [snapshot("1", "b")])
+
+    loaded = evaluator.load_pending(plan.pending[0].task.task_id)
+
+    assert loaded.snapshot_id == "1"
+    assert loaded.cache_key == plan.pending[0].cache_key

@@ -15,6 +15,9 @@ def test_checkpoint_store_writes_atomic_private_task(tmp_path: Path) -> None:
     assert ref.path.is_relative_to(store.root)
     assert ref.sha256 == sha256(ref.path.read_bytes()).hexdigest()
     assert json.loads(ref.path.read_text())["task_id"] == "profile-run-1"
+    assert store.read_task("profile-run-1") == {
+        "task_id": "profile-run-1"
+    }
 
 
 def test_checkpoint_store_rejects_path_traversal(tmp_path: Path) -> None:
