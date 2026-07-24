@@ -8,6 +8,12 @@
 
 **Tech Stack:** Python 3.11+, Pydantic v2, SQLite, Typer, pytest, uv, ruff
 
+## Execution Status
+
+- Tasks 1–3: completed with preserved RED/GREEN commits.
+- Task 4: completed; full suite, coverage, lint, privacy, and diff gates pass.
+- Task 5: pending the private real-world interview checkpoint.
+
 ## Global Constraints
 
 - Do not modify either pinned integration checkout.
