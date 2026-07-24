@@ -92,3 +92,15 @@ def test_changed_snapshot_has_cache_miss(tmp_path: Path) -> None:
     repo.save(evaluation(first_snapshot_id), cache_key("1" * 64))
 
     assert repo.find_by_cache_key(cache_key("2" * 64)) is None
+
+
+def test_list_current_returns_only_current_profile_and_snapshot(
+    tmp_path: Path,
+) -> None:
+    repo, first_snapshot_id, second_snapshot_id = repository(tmp_path)
+    repo.save(evaluation(first_snapshot_id), cache_key("1" * 64))
+    current = evaluation(second_snapshot_id)
+    repo.save(current, cache_key("2" * 64))
+
+    assert repo.list_current(profile_version=1) == [current]
+    assert repo.list_current(profile_version=2) == []
