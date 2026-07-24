@@ -120,7 +120,7 @@ def test_submit_persists_one_native_result(tmp_path: Path) -> None:
     task = plan.pending[0]
     result = evaluation(item)
 
-    saved = evaluator.submit(task.task, {
+    saved = evaluator.submit(task, {
         "task_id": task.task.task_id,
         "evaluations": [result.model_dump(mode="json")],
     })
