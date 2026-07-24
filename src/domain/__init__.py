@@ -10,8 +10,8 @@ from src.domain.candidate_interview import (
     OPTIONAL_INTERVIEW_DIMENSIONS,
     REQUIRED_INTERVIEW_DIMENSIONS,
     InterviewAnswer,
-    InterviewAnswerStatus,
     InterviewAnswers,
+    InterviewAnswerStatus,
     InterviewDimension,
     InterviewQuestion,
 )

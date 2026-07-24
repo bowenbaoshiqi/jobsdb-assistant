@@ -67,11 +67,13 @@ class InterviewAnswer(BaseModel):
 
     @model_validator(mode="after")
     def require_value_when_answered(self) -> "InterviewAnswer":
-        if self.status is InterviewAnswerStatus.ANSWERED:
-            if self.value is None or not self.value.strip():
-                raise ValueError(
-                    "answered interview value must not be empty"
-                )
+        if (
+            self.status is InterviewAnswerStatus.ANSWERED
+            and (self.value is None or not self.value.strip())
+        ):
+            raise ValueError(
+                "answered interview value must not be empty"
+            )
         return self
 
 
