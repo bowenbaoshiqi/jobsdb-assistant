@@ -14,6 +14,7 @@ def test_manifest_locks_approved_forks_and_required_capabilities() -> None:
         "https://github.com/bowenbaoshiqi/ai-job-search.git"
     )
     assert candidate.commit == "aa7c7073990492c9111fbdda48f6adde24a1d91b"
+    assert candidate.contract_version == "candidate-profile.v2"
     assert ".claude/commands/setup.md" in candidate.required_paths
 
     evaluation = manifest.integrations["job-evaluation"]

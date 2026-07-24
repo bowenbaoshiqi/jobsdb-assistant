@@ -5,6 +5,10 @@ from types import SimpleNamespace
 from typer.testing import CliRunner
 
 from src.application.candidate_onboarding import OnboardingStatus
+from src.domain.candidate_interview import (
+    InterviewDimension,
+    InterviewQuestion,
+)
 from src.main import app
 
 runner = CliRunner()
@@ -17,7 +21,13 @@ class FakeWorkflow:
             profile_version=None,
             task_id="profile-task-1",
             proposal_id=None,
-            questions=(),
+            questions=(
+                InterviewQuestion(
+                    dimension=InterviewDimension.BEHAVIORAL_STYLE,
+                    prompt="How do you prefer to work?",
+                    optional=False,
+                ),
+            ),
         )
 
     def submit_profile_result(self, run_id, task_id, payload):
@@ -68,6 +78,13 @@ def test_profile_prepare_prints_machine_readable_checkpoint(
     payload = json.loads(result.stdout)
     assert payload["status"] == "waiting_for_agent"
     assert payload["task_id"] == "profile-task-1"
+    assert payload["questions"] == [
+        {
+            "dimension": "behavioral_style",
+            "prompt": "How do you prefer to work?",
+            "optional": False,
+        }
+    ]
 
 
 def test_profile_submit_reads_private_json_result(
