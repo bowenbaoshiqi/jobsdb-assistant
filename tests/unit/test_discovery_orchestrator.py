@@ -119,6 +119,36 @@ async def test_discover_keeps_safe_partial_failure(
 
 
 @pytest.mark.asyncio
+async def test_public_discover_never_invokes_login() -> None:
+    orchestrator = make_orchestrator()
+    orchestrator._init_browser = AsyncMock()
+    orchestrator._ensure_login = AsyncMock(
+        side_effect=AssertionError(
+            "public discovery must not invoke login"
+        )
+    )
+    orchestrator._discover_loaded = AsyncMock(
+        return_value={
+            "keyword": "AI Architect",
+            "found": 0,
+            "captured": 0,
+        }
+    )
+    orchestrator._cleanup = AsyncMock()
+
+    report = await orchestrator.discover("AI Architect", limit=50)
+
+    assert report["keyword"] == "AI Architect"
+    orchestrator._init_browser.assert_awaited_once()
+    orchestrator._ensure_login.assert_not_awaited()
+    orchestrator._discover_loaded.assert_awaited_once_with(
+        "AI Architect",
+        50,
+    )
+    orchestrator._cleanup.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_discover_login_failure_cleans_up(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

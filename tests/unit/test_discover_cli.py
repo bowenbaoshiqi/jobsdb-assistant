@@ -61,3 +61,41 @@ def test_discover_prints_safe_summary(monkeypatch) -> None:
     assert "Quick Apply" in result.output
     assert "must not render" not in result.output
     discover.assert_awaited_once_with("Product Manager", limit=50)
+
+
+def test_discover_never_resolves_credentials(monkeypatch) -> None:
+    def fail_if_credentials_are_resolved(*_args, **_kwargs):
+        raise AssertionError(
+            "public discovery must not resolve credentials"
+        )
+
+    discover = AsyncMock(return_value={
+        "keyword": "AI Architect",
+        "found": 0,
+        "captured": 0,
+        "new": 0,
+        "unchanged": 0,
+        "changed": 0,
+        "apply_types": {
+            "quick_apply": 0,
+            "apply": 0,
+            "unknown": 0,
+        },
+        "failures": [],
+    })
+    monkeypatch.setattr(
+        "src.main.AccountRegistry.resolve_active",
+        fail_if_credentials_are_resolved,
+    )
+    monkeypatch.setattr(
+        "src.main.Orchestrator",
+        lambda *_args, **_kwargs: SimpleNamespace(discover=discover),
+    )
+
+    result = runner.invoke(
+        app,
+        ["discover", "--keyword", "AI Architect"],
+    )
+
+    assert result.exit_code == 0
+    discover.assert_awaited_once_with("AI Architect", limit=50)
