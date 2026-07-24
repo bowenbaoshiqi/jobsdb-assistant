@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "integrations": {
+    "candidate-profile": {
+      "url": "https://github.com/bowenbaoshiqi/ai-job-search.git",
+      "commit": "aa7c7073990492c9111fbdda48f6adde24a1d91b",
+      "license": "MIT",
+      "contract_version": "candidate-profile.v1",
+      "required_paths": [
+        "LICENSE",
+        ".claude/commands/setup.md",
+        ".claude/skills/job-application-assistant/01-candidate-profile.md",
+        ".claude/skills/job-application-assistant/02-behavioral-profile.md"
+      ]
+    },
+    "job-evaluation": {
+      "url": "https://github.com/bowenbaoshiqi/career-ops.git",
+      "commit": "01bf8b469ad5177a9c30230bc00509ead8e006c2",
+      "license": "MIT",
+      "contract_version": "career-ops-native-af.v1",
+      "required_paths": [
+        "LICENSE",
+        ".agents/skills/career-ops/SKILL.md",
+        "modes/_shared.md",
+        "modes/oferta.md"
+      ]
+    }
+  }
+}
