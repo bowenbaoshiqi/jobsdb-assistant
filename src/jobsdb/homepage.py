@@ -123,6 +123,16 @@ class HomepageScraper:
         self.page = page
         self.human = human
 
+    @staticmethod
+    def _to_listing(data: dict) -> JobListing:
+        return JobListing(
+            id=data["id"],
+            title=data["title"],
+            company=data["company"],
+            location=data["location"],
+            url=data["url"],
+        )
+
     async def get_recommended_jobs(self, max_jobs: int = 20) -> list[JobListing]:
         """
         抓取首页职位列表
@@ -160,16 +170,46 @@ class HomepageScraper:
         for data in job_data[:max_jobs]:
             if data['id'] not in seen_ids:
                 seen_ids.add(data['id'])
-                jobs.append(JobListing(
-                    id=data['id'],
-                    title=data['title'],
-                    company=data['company'],
-                    location=data['location'],
-                    url=data['url'],
-                ))
+                jobs.append(self._to_listing(data))
 
         logger.info(f"Found {len(jobs)} unique jobs")
         return jobs
+
+    async def get_search_jobs(
+        self,
+        max_jobs: int = 50,
+        no_growth_limit: int = 2,
+    ) -> list[JobListing]:
+        """Collect search results while bounded lazy loading makes progress."""
+        if max_jobs < 1:
+            raise ValueError("max_jobs must be at least 1")
+        if no_growth_limit < 1:
+            raise ValueError("no_growth_limit must be at least 1")
+
+        collected: dict[str, JobListing] = {}
+        stagnant_rounds = 0
+
+        while len(collected) < max_jobs and stagnant_rounds < no_growth_limit:
+            before = len(collected)
+            job_data = await self.page.evaluate(EXTRACTION_SCRIPT) or []
+            for data in job_data:
+                collected.setdefault(data["id"], self._to_listing(data))
+                if len(collected) >= max_jobs:
+                    break
+
+            if len(collected) == before:
+                stagnant_rounds += 1
+            else:
+                stagnant_rounds = 0
+
+            if len(collected) < max_jobs and stagnant_rounds < no_growth_limit:
+                await self.page.evaluate(
+                    "window.scrollTo(0, document.body.scrollHeight)"
+                )
+                await asyncio.sleep(1.5)
+
+        logger.info(f"Found {len(collected)} unique search jobs")
+        return list(collected.values())
 
     async def _auto_scroll_loading(self) -> None:
         """自动滚动加载更多职位"""

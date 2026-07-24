@@ -17,6 +17,7 @@ from rich.table import Table
 from config.settings import get_config
 from src.accounts.registry import Account, AccountRegistry
 from src.doctor import CheckStatus, run_checks
+from src.jobsdb.search import normalize_keyword
 from src.monitor.logger import configure_logger
 from src.orchestrator import Orchestrator
 from src.storage.database import Database
@@ -80,6 +81,54 @@ def doctor() -> None:
     console.print(table)
     if any(result.status is CheckStatus.FAIL for result in results):
         raise typer.Exit(code=1)
+
+
+@app.command()
+def discover(
+    keyword: str = typer.Option(
+        ...,
+        "--keyword",
+        "-k",
+        help="单一 JobsDB 搜索关键词（地区默认为香港）",
+    ),
+    login_mode: Optional[str] = typer.Option(
+        None,
+        "--login-mode",
+        help="登录模式: auto / manual；覆盖 config.login.mode",
+    ),
+) -> None:
+    """发现并保存 JobsDB 香港职位，不执行投递。"""
+    try:
+        normalized_keyword = normalize_keyword(keyword)
+    except ValueError as exc:
+        raise typer.BadParameter(
+            str(exc),
+            param_hint="--keyword",
+        ) from exc
+
+    config = get_config()
+    if login_mode:
+        config.login.mode = login_mode
+    if config.login.mode == "manual":
+        config.browser.headless = False
+    registry = AccountRegistry()
+    resolved = registry.resolve_active(
+        None,
+        allow_placeholder=(config.login.mode == "manual"),
+    )
+
+    import asyncio
+
+    orchestrator = Orchestrator(config, account=resolved)
+    report = asyncio.run(
+        orchestrator.discover(normalized_keyword, limit=50)
+    )
+    if "error" in report:
+        console.print(
+            f"[bold red]Discovery failed: {report['error']}[/bold red]"
+        )
+        raise typer.Exit(code=1)
+    _print_discovery_result(report)
 
 
 @app.command()
@@ -160,6 +209,31 @@ def start(
     except Exception as e:
         console.print(f"[bold red]Fatal error: {e}[/bold red]")
         raise
+
+
+def _print_discovery_result(report: dict) -> None:
+    """Print a discovery summary without rendering JD content."""
+    console.print(Panel.fit(
+        f"[bold blue]JobsDB Discovery[/bold blue]\n"
+        f"Keyword: [cyan]{report['keyword']}[/cyan]\n"
+        f"Found: {report['found']} · Captured: {report['captured']}",
+        border_style="blue",
+    ))
+
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("Result")
+    table.add_column("Count", justify="right")
+    table.add_row("New", str(report["new"]))
+    table.add_row("Unchanged", str(report["unchanged"]))
+    table.add_row("Changed", str(report["changed"]))
+    table.add_row(
+        "Quick Apply",
+        str(report["apply_types"]["quick_apply"]),
+    )
+    table.add_row("Apply", str(report["apply_types"]["apply"]))
+    table.add_row("Unknown", str(report["apply_types"]["unknown"]))
+    table.add_row("Failed details", str(len(report["failures"])))
+    console.print(table)
 
 
 @app.command()

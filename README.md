@@ -1,12 +1,11 @@
 # JobsDB Assistant
 
-当前产品版本：`v0.1.0`。新产品基于上游 JobsDB 自动投递引擎 v2.0
+当前产品版本：`v0.2.0`。新产品基于上游 JobsDB 自动投递引擎 v2.0
 构建；历史 `v2.0-phase*` 标签仅代表上游引擎的重构阶段。
 
-`v0.1.0` 是新产品的 public-safe foundation：保留上游 Quick Apply
-投递流程，同时为后续 JobsDB 职位发现、评分、定制材料、两阶段审批和本地
-Dashboard 建立稳定契约。JobsDB 的按钮名称在本项目中始终记为
-`Quick Apply` 或 `Apply`。
+`v0.2.0` 增加单关键词 JobsDB 香港职位发现：最多抓取 50 个职位，保存完整
+JD，识别 `Quick Apply` / `Apply` / `unknown`，并用不可变快照增量去重。
+原有 Quick Apply 投递流程保持不变。
 
 所有候选人资料、JD、定制简历、求职信、cookies、浏览器 profile、SQLite、
 日志和截图只保存在本地忽略目录，CI 不上传任何运行时 artifact。
@@ -22,7 +21,18 @@ uv run jobsdb-assistant --version
 uv run jobsdb-assistant doctor
 ```
 
-### 2. 登录（manual 模式，无需存凭证）
+### 2. 发现职位（不会投递）
+
+```bash
+uv run jobsdb-assistant discover \
+  --keyword "Product Manager" \
+  --login-mode manual
+```
+
+地区固定为香港，其他搜索筛选使用 JobsDB 默认值。首次运行可以在打开的浏览器
+中手动登录；命令只抓取并保存职位，不会进入申请状态机，也不会提交申请。
+
+### 3. 登录并投递（manual 模式，无需存凭证）
 
 ```bash
 uv run jobsdb-assistant start --login-mode manual --max-jobs 5
@@ -30,14 +40,14 @@ uv run jobsdb-assistant start --login-mode manual --max-jobs 5
 
 首次运行会打开浏览器等你手动登录 JobsDB（可过验证码）。登录态存入持久化 profile（`data/browser_profile/`），之后长期复用，无需再登录。
 
-### 3. 投递
+### 4. 投递
 
 ```bash
 scripts/run_apply.sh 5     # 一键投递(推荐),先校验登录 cookies 再启动;不传数字默认 5
 python -m src.main stats   # 查看统计
 ```
 
-### 4. Claude Code Skill：说"帮我投5个"（最省事）
+### 5. Claude Code Skill：说"帮我投5个"（最省事）
 
 仓库附带 skill 文档 [docs/skills/start-apply.md](docs/skills/start-apply.md)，复制到 Claude Code 的项目 skills 目录即可启用：
 
@@ -90,6 +100,14 @@ uv run python scripts/privacy_guard.py
 
 ## 📝 更新日志
 
+### v0.2.0 (2026-07-24) — JobsDB Discovery
+
+- 单一关键词搜索，地区默认为香港，每次最多收集 50 个唯一职位
+- 复用现有抓取器的滚动能力，以达到上限或连续无新增为停止条件
+- 保存完整 JD，并分类为 `Quick Apply`、`Apply` 或 `unknown`
+- SHA-256 不可变 JD 快照，支持新增、未变化和内容变更检测
+- `discover` 与申请队列隔离，不会触发投递
+
 ### v0.1.0 (2026-07-23) — Public-safe Foundation
 
 - 单一产品版本、领域契约和 SQLite migration ledger
@@ -140,7 +158,7 @@ uv run ruff check src/ tests/ scripts/privacy_guard.py
 uv run pytest -m 'not e2e' --cov=src --cov-branch --cov-report=term-missing
 ```
 
-详见 [v0.1.0 实现计划](docs/superpowers/plans/2026-07-23-v0.1.0-public-safe-foundation.md)。
+详见 [v0.2.0 实现计划](docs/superpowers/plans/2026-07-24-v0.2.0-jobsdb-discovery.md)。
 
 ## 📄 许可证
 

@@ -1,10 +1,17 @@
+import hashlib
 import sqlite3
+import uuid
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Optional
 
 from loguru import logger
 
+from src.domain.job import (
+    DiscoveryPersistenceState,
+    JobDetailCapture,
+    JobSnapshot,
+)
 from src.storage.migrations import Migration, MigrationRunner
 from src.storage.models import (
     ApplyResult,
@@ -19,20 +26,84 @@ def _mark_legacy_schema(_conn: sqlite3.Connection) -> None:
     """Version marker: legacy tables are created by Database._init_tables."""
 
 
+def _add_column_if_missing(
+    conn: sqlite3.Connection,
+    table: str,
+    column: str,
+    definition: str,
+) -> None:
+    columns = {
+        row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+    }
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
+def _add_discovery_schema(conn: sqlite3.Connection) -> None:
+    """Add v0.2 discovery state without replacing legacy tables."""
+    columns = {
+        "apply_type": "TEXT NOT NULL DEFAULT 'unknown'",
+        "first_seen": "TEXT",
+        "last_seen": "TEXT",
+        "current_snapshot_id": "INTEGER",
+        "is_active": "INTEGER NOT NULL DEFAULT 1",
+        "inactive_reason": "TEXT",
+    }
+    for column, definition in columns.items():
+        _add_column_if_missing(conn, "jobs", column, definition)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS job_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id TEXT NOT NULL REFERENCES jobs(id),
+            jd_text TEXT NOT NULL,
+            content_hash TEXT NOT NULL,
+            captured_at TEXT NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            UNIQUE(job_id, content_hash)
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_job_snapshots_job_id
+        ON job_snapshots(job_id)
+    """)
+
+
 class Database:
     """SQLite 数据库操作（多账户隔离）"""
 
     def __init__(self, db_path: str = "./data/jobsdb.db"):
         self.db_path = db_path
         self.account_alias: Optional[str] = None
+        self._connection_target = db_path
+        self._connection_is_uri = False
+        self._memory_keeper: Optional[sqlite3.Connection] = None
+        if db_path == ":memory:":
+            self._connection_target = (
+                f"file:jobsdb_{uuid.uuid4().hex}?mode=memory&cache=shared"
+            )
+            self._connection_is_uri = True
+            self._memory_keeper = sqlite3.connect(
+                self._connection_target,
+                uri=True,
+            )
         self._init_tables()
-        MigrationRunner(self.db_path).apply(
-            [Migration(1, "legacy v2 schema baseline", _mark_legacy_schema)]
+        MigrationRunner(
+            self._connection_target,
+            uri=self._connection_is_uri,
+        ).apply(
+            [
+                Migration(1, "legacy v2 schema baseline", _mark_legacy_schema),
+                Migration(2, "v0.2 discovery schema", _add_discovery_schema),
+            ]
         )
 
     @contextmanager
     def _connect(self):
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(
+            self._connection_target,
+            uri=self._connection_is_uri,
+        )
         conn.row_factory = sqlite3.Row
         try:
             yield conn
@@ -172,14 +243,138 @@ class Database:
         """保存或更新职位信息"""
         with self._connect() as conn:
             conn.execute("""
-                INSERT OR REPLACE INTO jobs
+                INSERT INTO jobs
                 (id, title, company, location, salary, url, posted_date, job_type, scraped_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    title = excluded.title,
+                    company = excluded.company,
+                    location = excluded.location,
+                    salary = excluded.salary,
+                    url = excluded.url,
+                    posted_date = excluded.posted_date,
+                    job_type = excluded.job_type,
+                    scraped_at = excluded.scraped_at
             """, (
                 job.id, job.title, job.company, job.location,
                 job.salary, job.url, job.posted_date, job.job_type,
                 job.scraped_at.isoformat() if job.scraped_at else datetime.now().isoformat(),
             ))
+
+    def save_discovered_job(
+        self,
+        capture: JobDetailCapture,
+        captured_at: Optional[datetime] = None,
+    ) -> DiscoveryPersistenceState:
+        """Persist current metadata and an immutable JD snapshot atomically."""
+        timestamp = captured_at or datetime.now(UTC)
+        timestamp_text = timestamp.isoformat()
+        content_hash = hashlib.sha256(capture.jd_text.encode("utf-8")).hexdigest()
+
+        with self._connect() as conn:
+            existing = conn.execute(
+                "SELECT current_snapshot_id FROM jobs WHERE id = ?",
+                (capture.jobsdb_job_id,),
+            ).fetchone()
+            current_hash = None
+            if existing and existing["current_snapshot_id"] is not None:
+                snapshot = conn.execute(
+                    "SELECT content_hash FROM job_snapshots WHERE id = ?",
+                    (existing["current_snapshot_id"],),
+                ).fetchone()
+                current_hash = snapshot["content_hash"] if snapshot else None
+
+            if existing is None:
+                state = DiscoveryPersistenceState.NEW
+            elif current_hash == content_hash:
+                state = DiscoveryPersistenceState.UNCHANGED
+            else:
+                state = DiscoveryPersistenceState.CHANGED
+
+            conn.execute("""
+                INSERT INTO jobs (
+                    id, title, company, location, url, scraped_at,
+                    apply_type, first_seen, last_seen, is_active, inactive_reason
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NULL)
+                ON CONFLICT(id) DO UPDATE SET
+                    title = excluded.title,
+                    company = excluded.company,
+                    location = excluded.location,
+                    url = excluded.url,
+                    scraped_at = excluded.scraped_at,
+                    apply_type = excluded.apply_type,
+                    last_seen = excluded.last_seen,
+                    is_active = 1,
+                    inactive_reason = NULL
+            """, (
+                capture.jobsdb_job_id,
+                capture.title,
+                capture.company,
+                capture.location,
+                capture.canonical_url,
+                timestamp_text,
+                capture.apply_type.value,
+                timestamp_text,
+                timestamp_text,
+            ))
+
+            if current_hash != content_hash:
+                conn.execute("""
+                    INSERT OR IGNORE INTO job_snapshots (
+                        job_id, jd_text, content_hash, captured_at, is_active
+                    )
+                    VALUES (?, ?, ?, ?, 1)
+                """, (
+                    capture.jobsdb_job_id,
+                    capture.jd_text,
+                    content_hash,
+                    timestamp_text,
+                ))
+                snapshot_id = conn.execute(
+                    "SELECT id FROM job_snapshots "
+                    "WHERE job_id = ? AND content_hash = ?",
+                    (capture.jobsdb_job_id, content_hash),
+                ).fetchone()["id"]
+                conn.execute(
+                    "UPDATE jobs SET current_snapshot_id = ? WHERE id = ?",
+                    (snapshot_id, capture.jobsdb_job_id),
+                )
+
+        return state
+
+    def get_job_snapshot_count(self, job_id: str) -> int:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) AS count FROM job_snapshots WHERE job_id = ?",
+                (job_id,),
+            ).fetchone()
+            return row["count"]
+
+    def get_current_job_snapshot(self, job_id: str) -> Optional[JobSnapshot]:
+        with self._connect() as conn:
+            row = conn.execute("""
+                SELECT s.job_id, s.jd_text, s.content_hash, s.captured_at, s.is_active
+                FROM jobs j
+                JOIN job_snapshots s ON s.id = j.current_snapshot_id
+                WHERE j.id = ?
+            """, (job_id,)).fetchone()
+            if row is None:
+                return None
+            return JobSnapshot(
+                job_id=row["job_id"],
+                jd_text=row["jd_text"],
+                content_hash=row["content_hash"],
+                captured_at=datetime.fromisoformat(row["captured_at"]),
+                is_active=bool(row["is_active"]),
+            )
+
+    def mark_job_inactive(self, job_id: str, reason: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE jobs SET is_active = 0, inactive_reason = ? WHERE id = ?",
+                (reason, job_id),
+            )
 
     def get_job(self, job_id: str) -> Optional[JobListing]:
         """获取职位信息"""

@@ -8,6 +8,7 @@ from typing import Optional
 from loguru import logger
 
 from src.browser.ports.page_controller import PageController
+from src.domain.job import ApplyType, JobDetailCapture
 from src.jobsdb.exceptions import JobNotFoundError
 from src.jobsdb.selectors import (
     ALREADY_APPLIED_BADGE,
@@ -23,6 +24,16 @@ from src.jobsdb.selectors import (
 )
 from src.simulation.behavior import HumanSimulator
 from src.utils.screenshot import capture_screenshot
+
+
+def normalize_jd_text(text: str) -> str:
+    """Normalize visible JD text without rewriting its content."""
+    lines = [line.strip() for line in text.replace("\r\n", "\n").split("\n")]
+    normalized: list[str] = []
+    for line in lines:
+        if line or (normalized and normalized[-1]):
+            normalized.append(line)
+    return "\n".join(normalized).strip()
 
 
 class JobDetailPage:
@@ -179,6 +190,50 @@ class JobDetailPage:
             logger.warning(f"Error getting job info: {e}")
 
         return info
+
+    async def capture_for_discovery(
+        self,
+        job_id: str,
+        canonical_url: str,
+    ) -> JobDetailCapture:
+        """Capture complete normalized fields without clicking an apply control."""
+        title = normalize_jd_text(await self.page.get_text(JOB_DETAIL_TITLE) or "")
+        company = normalize_jd_text(
+            await self.page.get_text(JOB_DETAIL_COMPANY) or ""
+        )
+        location = normalize_jd_text(
+            await self.page.get_text(JOB_DETAIL_LOCATION) or ""
+        )
+        jd_text = normalize_jd_text(
+            await self.page.get_text(JOB_DESCRIPTION) or ""
+        )
+
+        if not title:
+            raise JobNotFoundError("job title is missing")
+        if not company:
+            raise JobNotFoundError("job company is missing")
+        if not jd_text:
+            raise JobNotFoundError("job description is missing")
+
+        apply_type = ApplyType.UNKNOWN
+        apply_link = await self.page.query_selector(JOB_DETAIL_APPLY_LINK)
+        if apply_link and await apply_link.is_visible():
+            button_text = (await apply_link.text_content() or "").strip().lower()
+            apply_type = (
+                ApplyType.QUICK_APPLY
+                if self._is_quick_apply_text(button_text)
+                else ApplyType.APPLY
+            )
+
+        return JobDetailCapture(
+            jobsdb_job_id=job_id,
+            canonical_url=canonical_url,
+            title=title,
+            company=company,
+            location=location or None,
+            jd_text=jd_text,
+            apply_type=apply_type,
+        )
 
     async def _get_job_title(self) -> Optional[str]:
         """获取职位标题
