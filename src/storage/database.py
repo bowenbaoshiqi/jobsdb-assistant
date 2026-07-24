@@ -20,6 +20,7 @@ from src.storage.models import (
     SessionRecord,
     SessionStatus,
 )
+from src.storage.v03_migration import add_v03_schema
 
 
 def _mark_legacy_schema(_conn: sqlite3.Connection) -> None:
@@ -95,6 +96,11 @@ class Database:
             [
                 Migration(1, "legacy v2 schema baseline", _mark_legacy_schema),
                 Migration(2, "v0.2 discovery schema", _add_discovery_schema),
+                Migration(
+                    3,
+                    "v0.3 candidate and evaluation schema",
+                    add_v03_schema,
+                ),
             ]
         )
 
