@@ -8,10 +8,12 @@ from src.domain import (
     ApplicationStatus,
     ApplyType,
     CandidateProfile,
+    FactEvidence,
     Job,
     JobEvaluation,
     JobSnapshot,
     MaterialArtifact,
+    NativeDimension,
 )
 
 NOW = datetime(2026, 7, 23, tzinfo=UTC)
@@ -63,6 +65,69 @@ def test_evaluation_score_is_bounded() -> None:
             prompt_version="evaluation@1",
             overall_score=5.1,
             recommendation="apply",
+        )
+
+
+def test_confirmed_profile_is_frozen_and_preserves_evidence() -> None:
+    profile = CandidateProfile(
+        id="profile-1",
+        version=1,
+        verified_facts={"skills": ["Python"]},
+        fact_evidence={
+            "Python": [FactEvidence(source="cv.md", locator="skills")]
+        },
+        target_roles=["AI Architect"],
+        created_at=NOW,
+        confirmed_at=NOW,
+        content_hash="a" * 64,
+    )
+
+    assert profile.fact_evidence["Python"][0].source == "cv.md"
+    with pytest.raises(ValidationError):
+        profile.target_roles = ["Other"]
+
+
+def test_native_evaluation_requires_ordered_a_through_f_once() -> None:
+    dimensions = [
+        NativeDimension(
+            code=code,
+            title=f"Block {code}",
+            score=4.0,
+            findings=["Synthetic fit"],
+            evidence=["JD: synthetic requirement"],
+        )
+        for code in "ABCDEF"
+    ]
+
+    evaluation = JobEvaluation(
+        id="evaluation-1",
+        job_snapshot_id="snapshot-1",
+        profile_version=1,
+        profile_hash="a" * 64,
+        snapshot_hash="b" * 64,
+        engine_version="career-ops@01bf8b4",
+        engine_commit="c" * 40,
+        prompt_version="career-ops-native-af.v1",
+        overall_score=4.2,
+        dimensions=dimensions,
+        recommendation="strong_apply",
+        created_at=NOW,
+    )
+
+    assert [dimension.code for dimension in evaluation.dimensions] == list(
+        "ABCDEF"
+    )
+
+    with pytest.raises(ValidationError, match="A through F"):
+        evaluation.model_copy(
+            update={"dimensions": dimensions[:-1]},
+        ).model_validate(
+            {
+                **evaluation.model_dump(),
+                "dimensions": [
+                    dimension.model_dump() for dimension in dimensions[:-1]
+                ],
+            }
         )
 
 
