@@ -9,6 +9,8 @@ def test_guard_rejects_private_runtime_paths(tmp_path: Path) -> None:
         tracked=[
             "data/jobsdb.db",
             "workspace/applications/42/cv.pdf",
+            "integrations/candidate-profile/CLAUDE.md",
+            "integrations/job-evaluation/modes/oferta.md",
             "accounts/personal.json",
             ".env",
             ".claude/settings.local.json",
@@ -18,6 +20,8 @@ def test_guard_rejects_private_runtime_paths(tmp_path: Path) -> None:
     assert {finding.path for finding in findings} == {
         "data/jobsdb.db",
         "workspace/applications/42/cv.pdf",
+        "integrations/candidate-profile/CLAUDE.md",
+        "integrations/job-evaluation/modes/oferta.md",
         "accounts/personal.json",
         ".env",
         ".claude/settings.local.json",
@@ -30,6 +34,7 @@ def test_guard_allows_public_examples_and_source(tmp_path: Path) -> None:
         "accounts/example.json",
         "src/main.py",
         "tests/fixtures/synthetic_job.json",
+        "integrations/manifest.json",
         ".agents/skills/jobsdb-assistant/SKILL.md",
     ]
 
