@@ -21,20 +21,34 @@ NOW = datetime(2026, 7, 24, tzinfo=UTC)
 class FakeIntegrationManager:
     def __init__(self, root: Path) -> None:
         self.root = root
-        self.ready = False
+        self.ready_ids: set[str] = set()
         self.install_calls: list[str] = []
+
+    @property
+    def ready(self) -> bool:
+        return len(self.ready_ids) == 2
+
+    @ready.setter
+    def ready(self, value: bool) -> None:
+        self.ready_ids = (
+            {"candidate-profile", "job-evaluation"} if value else set()
+        )
 
     def check(self, integration_id: str) -> IntegrationState:
         return IntegrationState(
             id=integration_id,
             path=self.root / integration_id,
             commit="a" * 40,
-            status="ready" if self.ready else "missing",
+            status=(
+                "ready"
+                if integration_id in self.ready_ids
+                else "missing"
+            ),
         )
 
     def install_missing(self, integration_id: str) -> IntegrationState:
         self.install_calls.append(integration_id)
-        self.ready = True
+        self.ready_ids.add(integration_id)
         return self.check(integration_id)
 
 
