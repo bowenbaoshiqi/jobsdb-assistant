@@ -28,9 +28,13 @@ If status is `ready`, continue to discovery. If status is
 2. Read only its `capability_paths` below
    `integrations/candidate-profile/`.
 3. Read only the listed local source documents.
-4. Return either `questions` or a `proposal` matching the task schema.
-5. Save it to `workspace/ai-tasks/<task_id>/agent-result.json`.
-6. Submit it:
+4. Inspect `interview_complete` in the task. When it is `false`, return
+   `questions`; a proposal is forbidden. Questions must cover every required
+   dimension exactly once using the typed objects described below.
+5. When `interview_complete` is `true`, return a `proposal` matching the task
+   schema.
+6. Save it to `workspace/ai-tasks/<task_id>/agent-result.json`.
+7. Submit it:
 
 ```bash
 uv run python -m src.main workflow profile-submit \
@@ -39,8 +43,39 @@ uv run python -m src.main workflow profile-submit \
   --result workspace/ai-tasks/TASK_ID/agent-result.json
 ```
 
-When Python returns questions, ask the user, save a JSON object mapping each
-question to its answer, and run:
+The first task's `questions` result must contain exactly these dimensions:
+
+```text
+behavioral_style
+career_goals
+next_role_motivators
+must_haves
+deal_breakers
+salary_expectations
+references
+```
+
+Use one object per dimension with `dimension`, a concise candidate-aware
+`prompt`, and `optional`. Only `salary_expectations` and `references` have
+`optional: true`.
+
+When Python returns questions, ask the user conversationally. Save a JSON
+object keyed by dimension. Each value uses `status: answered` plus a non-empty
+`value`, or the explicit skip status `not_provided` / `no_preference`:
+
+```json
+{
+  "career_goals": {
+    "status": "answered",
+    "value": "Enterprise AI architecture leadership"
+  },
+  "salary_expectations": {
+    "status": "not_provided"
+  }
+}
+```
+
+Include every required dimension, then run:
 
 ```bash
 uv run python -m src.main workflow profile-answers \
@@ -57,7 +92,8 @@ uv run python -m src.main workflow profile-confirm \
   --proposal-id PROPOSAL_ID
 ```
 
-Never invent candidate facts. Every verified fact requires source evidence.
+Never invent candidate facts or interview answers. Every verified fact
+requires source evidence. Never convert silence into a preference.
 
 ## 2. Discover JobsDB roles
 

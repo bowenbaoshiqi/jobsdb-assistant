@@ -8,6 +8,9 @@
   career-ops without modifying either fork.
 - Added evidence-backed candidate onboarding proposals, explicit confirmation,
   immutable profile versions, and normal-run profile reuse.
+- Added a Python-enforced typed interview gate so a first-run CV cannot become
+  a proposal until every required dimension is answered or explicitly
+  skipped.
 - Added native career-ops ordered A–F evaluation with its original 1.0–5.0
   overall score and no score fusion or custom weighting.
 - Added exact incremental evaluation caching over JD, profile, engine, and

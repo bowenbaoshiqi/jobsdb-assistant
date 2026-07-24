@@ -5,7 +5,7 @@
       "url": "https://github.com/bowenbaoshiqi/ai-job-search.git",
       "commit": "aa7c7073990492c9111fbdda48f6adde24a1d91b",
       "license": "MIT",
-      "contract_version": "candidate-profile.v1",
+      "contract_version": "candidate-profile.v2",
       "required_paths": [
         "LICENSE",
         ".claude/commands/setup.md",

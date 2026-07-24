@@ -56,7 +56,14 @@ def _onboarding_payload(outcome) -> dict:
         "profile_version": outcome.profile_version,
         "task_id": outcome.task_id,
         "proposal_id": outcome.proposal_id,
-        "questions": list(outcome.questions),
+        "questions": [
+            {
+                "dimension": item.dimension.value,
+                "prompt": item.prompt,
+                "optional": item.optional,
+            }
+            for item in outcome.questions
+        ],
     }
 
 

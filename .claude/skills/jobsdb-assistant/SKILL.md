@@ -26,5 +26,11 @@ Read each task from `workspace/ai-tasks/<task_id>/task.json`, then read only
 the pinned integration files listed in `capability_paths`. Keep the current
 Claude Code session active until the report or an explicit Python error.
 
+For candidate onboarding, follow the canonical typed interview gate. A task
+with `interview_complete: false` must return all required question dimensions
+and cannot return a proposal. Collect dimension-keyed structured answers,
+including explicit skip statuses when chosen by the user, then service the
+follow-up task.
+
 Do not modify integration checkouts, update fork revisions, combine scoring
 systems, create application materials, or run application execution.

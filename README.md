@@ -44,7 +44,8 @@ uv run jobsdb-assistant discover \
 当前 Agent 会话直到任务完成。首次运行会：
 
 1. 按 manifest 安装两个固定 SHA 的 public fork；
-2. 使用 ai-job-search onboarding 能力提取资料并补充提问；
+2. 使用 ai-job-search onboarding 能力提取资料，并完成 Python 强制校验的
+   画像访谈；薪资和推荐人等敏感项可以明确选择不提供；
 3. 展示候选人画像，等待你明确确认后保存 `CandidateProfile v1`；
 4. 抓取 JobsDB 当前职位；
 5. 使用 career-ops 原生 A–F 规则评分；
@@ -64,6 +65,8 @@ uv run python -m src.main workflow report
 
 包含简历、画像、JD 和 AI 结果的检查点保存在忽略的
 `workspace/ai-tasks/`。v0.3 不生成定制简历/求职信，也不从评分流程执行投递。
+单份简历首次导入不能直接生成画像提案：必须先回答或明确跳过全部必问维度，
+Python 才允许 Agent 提交画像。
 
 ### 4. 登录并投递（manual 模式，无需存凭证）
 
@@ -137,6 +140,7 @@ uv run python scripts/privacy_guard.py
 
 - 固定 SHA、只读校验的 ai-job-search 与 career-ops public forks
 - ai-job-search 候选人 onboarding、事实证据、显式确认和不可变画像版本
+- Python 强制的 typed 画像访谈门禁，禁止 Agent 跳过缺失信息提问
 - career-ops 原生 A–F、1.0–5.0 职位评分，不混合评分或自定义加权
 - `JD hash + profile hash + engine SHA + contract` 精确增量缓存
 - 私有、原子、schema-bound CC/Codex AI 检查点
