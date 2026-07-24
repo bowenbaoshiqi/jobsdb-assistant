@@ -79,7 +79,11 @@ JOB_DETAIL_LOCATION = '[data-automation="job-detail-location"], [class*="job-loc
 JOB_DETAIL_SALARY = '[data-automation="job-detail-salary"], [class*="salary-detail"]'
 
 # 职位描述
-JOB_DESCRIPTION = '[data-automation="job-description"], [class*="job-description"]'
+JOB_DESCRIPTION = (
+    '[data-automation="jobAdDetails"], '
+    '[data-automation="job-description"], '
+    '[class*="job-description"]'
+)
 JOB_REQUIREMENTS = '[data-automation="job-requirements"], [class*="job-requirements"]'
 
 # 申请按钮（多种变体）
