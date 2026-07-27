@@ -21,6 +21,7 @@ const elements = {
   progressRunning: document.querySelector("#progress-running"),
   progressCompleted: document.querySelector("#progress-completed"),
   progressFailed: document.querySelector("#progress-failed"),
+  refreshResults: document.querySelector("#refresh-results"),
 };
 
 let currentPage = null;
@@ -298,9 +299,11 @@ async function confirmApplication() {
   }
 }
 
-async function loadJobs() {
+async function loadJobs({ preserveContentOnError = false } = {}) {
   setError();
-  elements.list.replaceChildren(text("p", "正在加载职位…", "muted"));
+  if (!preserveContentOnError) {
+    elements.list.replaceChildren(text("p", "正在加载职位…", "muted"));
+  }
   try {
     const response = await fetch(`/api/jobs${queryForApi()}`);
     if (!response.ok) throw new Error("无法加载职位。");
@@ -314,7 +317,7 @@ async function loadJobs() {
       ...(cards.length ? cards : [text("p", "没有符合当前筛选条件的职位。", "muted")]),
     );
   } catch (error) {
-    elements.list.replaceChildren();
+    if (!preserveContentOnError) elements.list.replaceChildren();
     setError(error.message);
   }
 }
@@ -349,6 +352,21 @@ function filtersChanged() {
   loadJobs();
 }
 
+async function refreshDashboard() {
+  elements.refreshResults.disabled = true;
+  elements.refreshResults.textContent = "刷新中…";
+  try {
+    await Promise.all([
+      loadJobs({ preserveContentOnError: true }),
+      loadEvaluationProgress(),
+    ]);
+    setStatus("评分结果已刷新。");
+  } finally {
+    elements.refreshResults.disabled = false;
+    elements.refreshResults.textContent = "刷新评分结果";
+  }
+}
+
 [elements.show, elements.score, elements.type, elements.selection].forEach((control) => {
   control.addEventListener("change", filtersChanged);
 });
@@ -360,11 +378,8 @@ elements.dialog.addEventListener("close", () => {
   if (elements.dialog.returnValue === "confirm") confirmApplication();
   else pendingApplyJob = null;
 });
+elements.refreshResults.addEventListener("click", refreshDashboard);
 
 filtersFromUrl();
 loadJobs();
 loadEvaluationProgress();
-window.setInterval(() => {
-  loadJobs();
-  loadEvaluationProgress();
-}, 3000);
