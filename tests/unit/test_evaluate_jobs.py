@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from src.adapters.checkpoint_io import CheckpointStore
+from src.adapters.career_ops_profile import CareerOpsProfileBundle
 from src.adapters.job_evaluation import JobEvaluationAdapter
 from src.application.evaluate_jobs import EvaluationService
 from src.domain.candidate import CandidateProfile
@@ -74,6 +75,26 @@ class FakeEvaluationRepository:
         self.by_key[key.digest()] = result
 
 
+class FakeProjector:
+    def project(self, candidate: CandidateProfile) -> CareerOpsProfileBundle:
+        root = Path("/private/profiles") / candidate.content_hash
+        return CareerOpsProfileBundle(
+            root=root,
+            profile_id=candidate.id,
+            profile_version=candidate.version,
+            profile_hash=candidate.content_hash,
+            projection_version="career-ops-profile-bundle.v1",
+            bundle_hash=(
+                "d" * 64 if candidate.version == 1 else "e" * 64
+            ),
+            cv_path=root / "cv.md",
+            profile_yml_path=root / "config" / "profile.yml",
+            profile_md_path=root / "modes" / "_profile.md",
+            manifest_path=root / "projection-manifest.json",
+            manifest={},
+        )
+
+
 def service(tmp_path: Path, repo: FakeEvaluationRepository):
     return EvaluationService(
         evaluations=repo,
@@ -82,6 +103,7 @@ def service(tmp_path: Path, repo: FakeEvaluationRepository):
             "career-ops-native-af.v1",
         ),
         checkpoints=CheckpointStore(tmp_path / "workspace" / "ai-tasks"),
+        profile_projector=FakeProjector(),
     )
 
 
@@ -92,7 +114,12 @@ def test_plan_reuses_cache_and_tasks_only_new_snapshots(
     evaluator = service(tmp_path, repo)
     first = snapshot("1", "b")
     second = snapshot("2", "d")
-    first_key = evaluator.cache_key(profile(), first)
+    candidate = profile()
+    first_key = evaluator.cache_key(
+        candidate,
+        FakeProjector().project(candidate),
+        first,
+    )
     repo.by_key[first_key.digest()] = evaluation(first)
 
     plan = evaluator.plan("run-1", profile(), [first, second])
@@ -106,10 +133,40 @@ def test_profile_change_invalidates_cache(tmp_path: Path) -> None:
     evaluator = service(tmp_path, FakeEvaluationRepository())
     item = snapshot("1", "b")
 
-    first = evaluator.cache_key(profile(1, "a"), item)
-    second = evaluator.cache_key(profile(2, "e"), item)
+    first_profile = profile(1, "a")
+    second_profile = profile(2, "e")
+    first = evaluator.cache_key(
+        first_profile,
+        FakeProjector().project(first_profile),
+        item,
+    )
+    second = evaluator.cache_key(
+        second_profile,
+        FakeProjector().project(second_profile),
+        item,
+    )
 
     assert first.digest() != second.digest()
+
+
+def test_projection_change_invalidates_cache(tmp_path: Path) -> None:
+    evaluator = service(tmp_path, FakeEvaluationRepository())
+    candidate = profile()
+    item = snapshot("1", "b")
+    first_bundle = FakeProjector().project(candidate)
+    second_bundle = first_bundle.model_copy(
+        update={"bundle_hash": "f" * 64}
+    )
+
+    assert evaluator.cache_key(
+        candidate,
+        first_bundle,
+        item,
+    ).digest() != evaluator.cache_key(
+        candidate,
+        second_bundle,
+        item,
+    ).digest()
 
 
 def test_submit_persists_one_native_result(tmp_path: Path) -> None:

@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from src.adapters.candidate_profile import CandidateProfileAdapter
+from src.adapters.career_ops_profile import CareerOpsProfileAdapter
 from src.adapters.checkpoint_io import CheckpointStore
 from src.adapters.job_evaluation import JobEvaluationAdapter
 from src.application.candidate_onboarding import CandidateOnboarding
@@ -66,6 +67,14 @@ def workflow(tmp_path: Path):
         EvaluationRepository(database),
         JobEvaluationAdapter("a" * 40, "career-ops-native-af.v1"),
         checkpoints,
+        CareerOpsProfileAdapter(
+            workspace_root=(
+                tmp_path / "workspace" / "career-ops-profiles"
+            ),
+            candidate_integration_commit="a" * 40,
+            career_ops_integration_commit="a" * 40,
+            forbidden_roots=(tmp_path / "integrations",),
+        ),
     )
     return (
         CandidateEvaluationWorkflow(
@@ -127,3 +136,18 @@ def test_evaluation_requires_confirmed_profile(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="confirmed candidate profile"):
         app.prepare_evaluations("run-1")
+
+
+def test_evaluation_requires_explicit_update_for_legacy_profile(
+    tmp_path: Path,
+) -> None:
+    app, profiles, integrations = workflow(tmp_path)
+    integrations.ready = True
+    profiles.create_proposal("run-1", proposal())
+    profiles.confirm("proposal-1", confirmed_at=NOW)
+
+    with pytest.raises(
+        ValueError,
+        match="requires explicit update before career-ops evaluation",
+    ):
+        app.prepare_evaluations("run-2")

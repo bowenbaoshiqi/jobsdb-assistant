@@ -1,8 +1,10 @@
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
+from src.adapters.career_ops_profile import CareerOpsProfileBundle
 from src.adapters.job_evaluation import JobEvaluationAdapter
 from src.domain.candidate import CandidateProfile
 from src.domain.job import ApplyType, CurrentSnapshotRecord
@@ -32,6 +34,23 @@ def snapshot() -> CurrentSnapshotRecord:
         apply_type=ApplyType.QUICK_APPLY,
         jd_text="Synthetic JD",
         content_hash="b" * 64,
+    )
+
+
+def bundle() -> CareerOpsProfileBundle:
+    root = Path("/private/workspace/career-ops-profiles") / ("a" * 64)
+    return CareerOpsProfileBundle(
+        root=root,
+        profile_id="profile-1",
+        profile_version=1,
+        profile_hash="a" * 64,
+        projection_version="career-ops-profile-bundle.v1",
+        bundle_hash="d" * 64,
+        cv_path=root / "cv.md",
+        profile_yml_path=root / "config" / "profile.yml",
+        profile_md_path=root / "modes" / "_profile.md",
+        manifest_path=root / "projection-manifest.json",
+        manifest={},
     )
 
 
@@ -77,6 +96,7 @@ def test_evaluation_task_uses_only_native_career_ops_scoring() -> None:
     task = adapter.build_task(
         "evaluation-run-1",
         profile(),
+        bundle(),
         [snapshot()],
     )
 
@@ -86,6 +106,12 @@ def test_evaluation_task_uses_only_native_career_ops_scoring() -> None:
         "modes/oferta.md",
     ]
     assert task.mode == "evaluation_only"
+    assert task.profile_context_paths == [
+        str(bundle().profile_yml_path),
+        str(bundle().profile_md_path),
+        str(bundle().cv_path),
+    ]
+    assert not hasattr(task, "profile")
 
 
 def test_evaluation_adapter_accepts_matching_native_result() -> None:
@@ -96,6 +122,7 @@ def test_evaluation_adapter_accepts_matching_native_result() -> None:
     task = adapter.build_task(
         "evaluation-run-1",
         profile(),
+        bundle(),
         [snapshot()],
     )
 
@@ -112,6 +139,7 @@ def test_evaluation_adapter_rejects_missing_native_block() -> None:
     task = adapter.build_task(
         "evaluation-run-1",
         profile(),
+        bundle(),
         [snapshot()],
     )
 
