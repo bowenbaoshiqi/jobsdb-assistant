@@ -1,0 +1,4 @@
+interface:
+  display_name: "JobsDB Assistant"
+  short_description: "Run candidate profiling and JobsDB job evaluation"
+  default_prompt: "Use $jobsdb-assistant to profile me and evaluate JobsDB roles."

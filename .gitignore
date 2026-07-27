@@ -29,6 +29,10 @@ wheels/
 data/
 workspace/
 
+# 外部能力仓库仅允许提交锁文件；本地 clone 永不进入主仓库
+/integrations/*/
+!/integrations/manifest.json
+
 # 简历、求职信、截图和本地数据库不得进入公共仓库
 *.db
 *.sqlite

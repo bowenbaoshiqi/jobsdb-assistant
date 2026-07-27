@@ -35,6 +35,7 @@ dependencies = [
     "pydantic-settings>=2.0.0",
     "typer>=0.9.0",
     "python-dotenv>=1.0.0",
+    "PyYAML>=6.0,<7",
 ]
 
 [project.optional-dependencies]

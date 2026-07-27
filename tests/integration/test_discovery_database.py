@@ -107,7 +107,7 @@ def test_discovery_migration_is_applied_once(tmp_path) -> None:
             row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()
         }
 
-    assert versions == [(1,), (2,)]
+    assert versions == [(1,), (2,), (3,)]
     assert {
         "apply_type",
         "first_seen",
@@ -133,3 +133,17 @@ def test_legacy_save_job_preserves_discovery_snapshot(tmp_path) -> None:
 
     assert db.get_job_snapshot_count("123") == 1
     assert db.get_current_job_snapshot("123") is not None
+
+
+def test_list_current_snapshot_records_returns_active_evaluation_inputs(
+    tmp_path,
+) -> None:
+    db = Database(str(tmp_path / "jobs.db"))
+    db.save_discovered_job(capture())
+
+    records = db.list_current_snapshot_records()
+
+    assert len(records) == 1
+    assert records[0].job_id == "123"
+    assert records[0].title == "Product Manager"
+    assert records[0].jd_text == "Original JD"

@@ -1,11 +1,13 @@
 # JobsDB Assistant
 
-当前产品版本：`v0.2.0`。新产品基于上游 JobsDB 自动投递引擎 v2.0
+当前产品版本：`v0.3.0`。新产品基于上游 JobsDB 自动投递引擎 v2.0
 构建；历史 `v2.0-phase*` 标签仅代表上游引擎的重构阶段。
 
-`v0.2.0` 增加单关键词 JobsDB 香港职位发现：最多抓取 50 个职位，保存完整
-JD，识别 `Quick Apply` / `Apply` / `unknown`，并用不可变快照增量去重。
-原有 Quick Apply 投递流程保持不变。
+`v0.3.0` 在单关键词 JobsDB 香港职位发现之上，增加确认后版本化的候选人画像，
+并将完整画像确定性映射为 career-ops 原生资料，再执行其 A–F、1.0–5.0
+职位评分。Claude Code/Codex 提供 AI
+推理，Python 与 SQLite 稳定控制校验、缓存和报告。原有 Quick Apply 投递流程
+保持不变。
 
 所有候选人资料、JD、定制简历、求职信、cookies、浏览器 profile、SQLite、
 日志和截图只保存在本地忽略目录，CI 不上传任何运行时 artifact。
@@ -25,14 +27,49 @@ uv run jobsdb-assistant doctor
 
 ```bash
 uv run jobsdb-assistant discover \
-  --keyword "Product Manager" \
-  --login-mode manual
+  --keyword "Product Manager"
 ```
 
-地区固定为香港，其他搜索筛选使用 JobsDB 默认值。首次运行可以在打开的浏览器
-中手动登录；命令只抓取并保存职位，不会进入申请状态机，也不会提交申请。
+地区固定为香港，其他搜索筛选使用 JobsDB 默认值。命令直接打开公开 JobsDB
+页面抓取并保存职位，不读取账户、不登录、不要求邮箱或密码，也不会进入申请
+状态机或提交申请。
 
-### 3. 登录并投递（manual 模式，无需存凭证）
+### 3. 在 Claude Code 或 Codex 中生成画像并评分
+
+仓库内置同一套 `jobsdb-assistant` Skill：
+
+- Codex/open-agent：`.agents/skills/jobsdb-assistant/SKILL.md`
+- Claude Code：`.claude/skills/jobsdb-assistant/SKILL.md`
+
+在 CC/Codex 中说“用 jobsdb-assistant 搜索并评分 AI Architect 职位”。保持
+当前 Agent 会话直到任务完成。首次运行会：
+
+1. 按 manifest 安装两个固定 SHA 的 public fork；
+2. 使用 ai-job-search onboarding 能力提取资料，并完成 Python 强制校验的
+   画像访谈；薪资和推荐人等敏感项可以明确选择不提供；
+3. 展示候选人画像，等待你明确确认后保存 `CandidateProfile v1`；
+4. 抓取 JobsDB 当前职位；
+5. 使用 career-ops 原生 A–F 规则评分；
+6. 输出完整本地报告。
+
+后续运行默认复用已安装的 fork、已确认画像和未变化 JD 的评分缓存。只有明确要求
+更新画像时才创建 `v2`；不会自动覆盖旧版本或自动更新 fork。
+
+Python CLI 是 Skill 使用的稳定协议：
+
+```bash
+uv run python -m src.main workflow profile-prepare --run-id RUN_ID --source PATH
+uv run python -m src.main discover --keyword "AI Architect"
+uv run python -m src.main workflow evaluation-prepare --run-id RUN_ID
+uv run python -m src.main workflow report
+```
+
+包含简历、画像、JD 和 AI 结果的检查点保存在忽略的
+`workspace/ai-tasks/`。v0.3 不生成定制简历/求职信，也不从评分流程执行投递。
+单份简历首次导入不能直接生成画像提案：必须先回答或明确跳过全部必问维度，
+Python 才允许 Agent 提交画像。
+
+### 4. 登录并投递（manual 模式，无需存凭证）
 
 ```bash
 uv run jobsdb-assistant start --login-mode manual --max-jobs 5
@@ -40,14 +77,14 @@ uv run jobsdb-assistant start --login-mode manual --max-jobs 5
 
 首次运行会打开浏览器等你手动登录 JobsDB（可过验证码）。登录态存入持久化 profile（`data/browser_profile/`），之后长期复用，无需再登录。
 
-### 4. 投递
+### 5. 投递
 
 ```bash
 scripts/run_apply.sh 5     # 一键投递(推荐),先校验登录 cookies 再启动;不传数字默认 5
 python -m src.main stats   # 查看统计
 ```
 
-### 5. Claude Code Skill：说"帮我投5个"（最省事）
+### 6. Claude Code 投递 Skill：说"帮我投5个"
 
 仓库附带 skill 文档 [docs/skills/start-apply.md](docs/skills/start-apply.md)，复制到 Claude Code 的项目 skills 目录即可启用：
 
@@ -100,9 +137,23 @@ uv run python scripts/privacy_guard.py
 
 ## 📝 更新日志
 
+### v0.3.0 (2026-07-24) — Candidate & Evaluation
+
+- 固定 SHA、只读校验的 ai-job-search 与 career-ops public forks
+- ai-job-search 的完整 CV 解析与逐项访谈综合，原始回答由 Python 保存
+- 私有、不可变的 career-ops 原生画像包：`cv.md`、`config/profile.yml`、
+  `modes/_profile.md`
+- ai-job-search 候选人 onboarding、事实证据、显式确认和不可变画像版本
+- Python 强制的 typed 画像访谈门禁，禁止 Agent 跳过缺失信息提问
+- career-ops 原生 A–F、1.0–5.0 职位评分，不混合评分或自定义加权
+- `JD hash + profile bundle hash + engine SHA + contract` 精确增量缓存
+- 私有、原子、schema-bound CC/Codex AI 检查点
+- 当前 JobsDB 职位安全排序报告；不渲染完整 JD 或候选人原始资料
+
 ### v0.2.0 (2026-07-24) — JobsDB Discovery
 
 - 单一关键词搜索，地区默认为香港，每次最多收集 50 个唯一职位
+- 公开浏览器发现流程与账户、密码和登录完全隔离
 - 复用现有抓取器的滚动能力，以达到上限或连续无新增为停止条件
 - 保存完整 JD，并分类为 `Quick Apply`、`Apply` 或 `unknown`
 - SHA-256 不可变 JD 快照，支持新增、未变化和内容变更检测
@@ -142,8 +193,13 @@ uv run python scripts/privacy_guard.py
 
 ```
 src/
+├── adapters/    # ai-job-search / career-ops schema-bound 检查点
+├── application/ # 候选人画像、增量评分和 v0.3 主流程
 ├── browser/     # 浏览器抽象层(ports / fake / playwright 实现 / stealth)
+├── domain/      # 画像、JD、原生 A–F 评分契约
+├── integrations/# 固定 fork manifest 与只读校验
 ├── jobsdb/      # JobsDB 交互(apply 状态机、login、selectors)
+├── reporting/   # 本地安全评分报告
 ├── simulation/  # 人类行为模拟(鼠标 Bezier、拟人打字)
 ├── scheduler/   # 频率控制与队列
 ├── storage/     # SQLite + cookies
