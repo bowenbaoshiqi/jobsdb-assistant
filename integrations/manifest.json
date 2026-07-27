@@ -5,7 +5,7 @@
       "url": "https://github.com/bowenbaoshiqi/ai-job-search.git",
       "commit": "aa7c7073990492c9111fbdda48f6adde24a1d91b",
       "license": "MIT",
-      "contract_version": "candidate-profile.v2",
+      "contract_version": "candidate-profile.v3",
       "required_paths": [
         "LICENSE",
         ".claude/commands/setup.md",
@@ -17,7 +17,7 @@
       "url": "https://github.com/bowenbaoshiqi/career-ops.git",
       "commit": "01bf8b469ad5177a9c30230bc00509ead8e006c2",
       "license": "MIT",
-      "contract_version": "career-ops-native-af.v1",
+      "contract_version": "career-ops-native-profile-bundle.v2",
       "required_paths": [
         "LICENSE",
         ".agents/skills/career-ops/SKILL.md",

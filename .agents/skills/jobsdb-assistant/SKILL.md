@@ -32,7 +32,10 @@ If status is `ready`, continue to discovery. If status is
    `questions`; a proposal is forbidden. Questions must cover every required
    dimension exactly once using the typed objects described below.
 5. When `interview_complete` is `true`, return a `proposal` matching the task
-   schema.
+   schema. It must include a complete evidence-backed `canonical_cv` and
+   exactly one `intent_syntheses` item for every typed answer. Bind each item
+   to the exact task answer with its SHA-256 `answer_hash`; use the same
+   dimension for `dimension` and `target_field`.
 6. Save it to `workspace/ai-tasks/<task_id>/agent-result.json`.
 7. Submit it:
 
@@ -92,8 +95,10 @@ uv run python -m src.main workflow profile-confirm \
   --proposal-id PROPOSAL_ID
 ```
 
-Never invent candidate facts or interview answers. Every verified fact
-requires source evidence. Never convert silence into a preference.
+Never invent candidate facts or interview answers. Every factual leaf in
+`canonical_cv` requires source evidence. Never convert silence into a
+preference. Python injects its saved raw answers into the proposal after
+validation; Agent output cannot replace or omit them.
 
 ## 2. Discover JobsDB roles
 
@@ -119,12 +124,17 @@ For every pending task:
 1. Read `workspace/ai-tasks/<task_id>/task.json`.
 2. Read only its `capability_paths` below
    `integrations/job-evaluation/`.
-3. Run career-ops evaluation-only reasoning against the embedded confirmed
-   profile and single JD.
-4. Preserve native ordered A-F blocks and the native 1.0–5.0 overall score.
-5. Save schema-valid JSON to
+3. Read exactly the three private files listed by
+   `profile_context_paths`. Load the career-ops context in this order:
+   `config/profile.yml → modes/_shared.md → modes/_profile.md → modes/oferta.md → cv.md`.
+   The `_shared.md` and `oferta.md` files come from the pinned integration;
+   the other three come from the immutable private bundle.
+4. Run career-ops evaluation-only reasoning against that native candidate
+   context and the single JD.
+5. Preserve native ordered A-F blocks and the native 1.0–5.0 overall score.
+6. Save schema-valid JSON to
    `workspace/ai-tasks/<task_id>/agent-result.json`.
-6. Submit it:
+7. Submit it:
 
 ```bash
 uv run python -m src.main workflow evaluation-submit \
@@ -132,8 +142,9 @@ uv run python -m src.main workflow evaluation-submit \
   --result workspace/ai-tasks/TASK_ID/agent-result.json
 ```
 
-Do not combine scores with ai-job-search, add weights, convert to percentages,
-generate application materials, or control browser application execution.
+Never recreate, edit, or copy the profile bundle. Do not combine scores with
+ai-job-search, add weights, convert to percentages, generate application
+materials, or control browser application execution.
 Continue other tasks if one result is rejected; report the rejected task ID
 and Python validation error.
 

@@ -30,7 +30,14 @@ For candidate onboarding, follow the canonical typed interview gate. A task
 with `interview_complete: false` must return all required question dimensions
 and cannot return a proposal. Collect dimension-keyed structured answers,
 including explicit skip statuses when chosen by the user, then service the
-follow-up task.
+follow-up task. A completed proposal includes evidence-backed `canonical_cv`
+and one answer-hash-bound synthesis per dimension; Python injects and
+preserves the raw answers.
+
+For evaluation, read exactly the task's `profile_context_paths` and use the
+native loading order
+`config/profile.yml → modes/_shared.md → modes/_profile.md → modes/oferta.md → cv.md`.
+Never recreate or edit the immutable private profile bundle.
 
 JobsDB discovery is public browser navigation and never uses credentials or
 login. Do not request password configuration during discovery.

@@ -4,7 +4,8 @@
 构建；历史 `v2.0-phase*` 标签仅代表上游引擎的重构阶段。
 
 `v0.3.0` 在单关键词 JobsDB 香港职位发现之上，增加确认后版本化的候选人画像，
-以及 career-ops 原生 A–F、1.0–5.0 职位评分。Claude Code/Codex 提供 AI
+并将完整画像确定性映射为 career-ops 原生资料，再执行其 A–F、1.0–5.0
+职位评分。Claude Code/Codex 提供 AI
 推理，Python 与 SQLite 稳定控制校验、缓存和报告。原有 Quick Apply 投递流程
 保持不变。
 
@@ -139,10 +140,13 @@ uv run python scripts/privacy_guard.py
 ### v0.3.0 (2026-07-24) — Candidate & Evaluation
 
 - 固定 SHA、只读校验的 ai-job-search 与 career-ops public forks
+- ai-job-search 的完整 CV 解析与逐项访谈综合，原始回答由 Python 保存
+- 私有、不可变的 career-ops 原生画像包：`cv.md`、`config/profile.yml`、
+  `modes/_profile.md`
 - ai-job-search 候选人 onboarding、事实证据、显式确认和不可变画像版本
 - Python 强制的 typed 画像访谈门禁，禁止 Agent 跳过缺失信息提问
 - career-ops 原生 A–F、1.0–5.0 职位评分，不混合评分或自定义加权
-- `JD hash + profile hash + engine SHA + contract` 精确增量缓存
+- `JD hash + profile bundle hash + engine SHA + contract` 精确增量缓存
 - 私有、原子、schema-bound CC/Codex AI 检查点
 - 当前 JobsDB 职位安全排序报告；不渲染完整 JD 或候选人原始资料
 

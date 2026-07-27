@@ -8,13 +8,18 @@
   career-ops without modifying either fork.
 - Added evidence-backed candidate onboarding proposals, explicit confirmation,
   immutable profile versions, and normal-run profile reuse.
+- Added complete evidence-backed CV extraction and one synthesis per typed
+  interview answer while Python preserves the exact raw answers.
+- Added deterministic private career-ops-native profile bundles containing
+  `cv.md`, `config/profile.yml`, `modes/_profile.md`, and an integrity
+  manifest; both pinned forks remain read-only.
 - Added a Python-enforced typed interview gate so a first-run CV cannot become
   a proposal until every required dimension is answered or explicitly
   skipped.
 - Added native career-ops ordered A–F evaluation with its original 1.0–5.0
   overall score and no score fusion or custom weighting.
-- Added exact incremental evaluation caching over JD, profile, engine, and
-  contract hashes.
+- Added exact incremental evaluation caching over JD, native profile bundle,
+  engine, and contract hashes.
 - Added private atomic JSON checkpoints serviced by the active Claude Code or
   Codex session.
 - Added a Python-controlled workflow CLI and safe local evaluation report.
