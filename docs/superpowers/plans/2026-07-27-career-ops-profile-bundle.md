@@ -8,6 +8,10 @@
 
 **Tech Stack:** Python 3.11+, Pydantic v2, PyYAML, SQLite JSON payloads, Typer, pytest, uv, ruff
 
+**Execution status (2026-07-27):** Tasks 1–5 are complete using the recorded
+RED/GREEN commits. Task 6 verification and evidence are complete; the private
+profile-v2 update remains an explicit user-answer and confirmation checkpoint.
+
 ## Global Constraints
 
 - Do not modify either pinned integration checkout.
