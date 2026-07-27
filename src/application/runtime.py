@@ -38,6 +38,14 @@ def build_workflow(
                 candidate_spec.contract_version,
             ),
             checkpoints,
+        ),
+        evaluations=EvaluationService(
+            evaluation_repository,
+            JobEvaluationAdapter(
+                evaluation_spec.commit,
+                evaluation_spec.contract_version,
+            ),
+            checkpoints,
             CareerOpsProfileAdapter(
                 workspace_root=(
                     root / "workspace" / "career-ops-profiles"
@@ -49,14 +57,6 @@ def build_workflow(
                     root / "integrations" / "job-evaluation",
                 ),
             ),
-        ),
-        evaluations=EvaluationService(
-            evaluation_repository,
-            JobEvaluationAdapter(
-                evaluation_spec.commit,
-                evaluation_spec.contract_version,
-            ),
-            checkpoints,
         ),
         evaluation_repository=evaluation_repository,
         integrations=IntegrationManager(
