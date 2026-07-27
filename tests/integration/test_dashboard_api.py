@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from src.dashboard.app import DashboardDependencies, create_dashboard_app
 from src.dashboard.application_service import DashboardApplicationService
+from src.dashboard.evaluation_progress import EvaluationProgressStore
 from src.dashboard.query_service import DashboardQueryService
 from src.domain.job import ApplyType, JobDetailCapture
 from src.storage.database import Database
@@ -34,7 +35,7 @@ def _save_job(
 
 
 @pytest.fixture
-def dashboard_api() -> tuple[TestClient, AsyncMock]:
+def dashboard_api(tmp_path) -> tuple[TestClient, AsyncMock]:
     database = Database(":memory:")
     _save_job(database, "quick-1", ApplyType.QUICK_APPLY)
     _save_job(database, "apply-1", ApplyType.APPLY)
@@ -50,6 +51,9 @@ def dashboard_api() -> tuple[TestClient, AsyncMock]:
             query_service=DashboardQueryService(database),
             selection_repository=SelectionRepository(database),
             application_service=application_service,
+            evaluation_progress=EvaluationProgressStore(
+                tmp_path / "evaluation-progress.json"
+            ),
         )
     )
     return TestClient(app), runner
@@ -79,6 +83,21 @@ def test_jobs_endpoint_supports_all_mode(
         "quick-1",
         "apply-1",
     }
+
+
+def test_evaluation_progress_endpoint_reports_current_batch(
+    dashboard_api: tuple[TestClient, AsyncMock],
+) -> None:
+    client, _runner = dashboard_api
+    store = client.app.state.dashboard_dependencies.evaluation_progress
+    store.start(["task-1", "task-2"], now=NOW)
+
+    response = client.get("/api/evaluation-progress")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "active"
+    assert response.json()["total"] == 2
+    assert response.json()["queued"] == 2
 
 
 def test_selection_lifecycle(
@@ -163,7 +182,7 @@ def test_dashboard_html_loads(
     response = client.get("/")
 
     assert response.status_code == 200
-    assert "JobsDB Assistant" in response.text
+    assert "JobsDB 求职助手" in response.text
 
 
 def test_page_contains_review_and_safe_action_controls(
@@ -176,7 +195,8 @@ def test_page_contains_review_and_safe_action_controls(
     assert 'id="job-list"' in html
     assert 'id="selected-count"' in html
     assert 'id="show-filter"' in html
-    assert "Direct apply with default CV" in html
-    assert "Open job and apply manually" in html
-    assert "Tailored materials (later version)" in html
+    assert "使用默认简历直接投递" in html
+    assert "打开职位并人工投递" in html
+    assert "定制申请材料（后续版本）" in html
     assert 'id="apply-confirmation"' in html
+    assert 'id="evaluation-progress"' in html
