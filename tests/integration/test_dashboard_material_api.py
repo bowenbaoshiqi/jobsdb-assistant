@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 from fastapi.testclient import TestClient
 
@@ -120,7 +121,10 @@ def _client(tmp_path: Path, *, fact_warning: bool = False) -> TestClient:
             database=database,
             query_service=DashboardQueryService(database),
             selection_repository=SelectionRepository(database),
-            application_service=DashboardApplicationService(database),
+            application_service=DashboardApplicationService(
+                database,
+                runner=AsyncMock(),
+            ),
             material_service=material_service,
         )
     )

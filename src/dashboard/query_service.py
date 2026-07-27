@@ -11,6 +11,7 @@ from src.dashboard.schemas import (
     DashboardDimension,
     DashboardFilters,
     DashboardJob,
+    DashboardMaterialSummary,
     DashboardPage,
     DashboardSummary,
     EvaluationProvenance,
@@ -23,6 +24,7 @@ from src.storage.dashboard_application_repository import (
 )
 from src.storage.database import Database
 from src.storage.evaluation_repository import EvaluationRepository
+from src.storage.material_repository import MaterialRepository
 from src.storage.selection_repository import SelectionRepository
 
 
@@ -40,6 +42,7 @@ class DashboardQueryService:
         self.evaluations = EvaluationRepository(database)
         self.selections = SelectionRepository(database)
         self.application_tasks = DashboardApplicationRepository(database)
+        self.materials = MaterialRepository(database)
         self.translation_catalog = (
             translation_catalog
             if translation_catalog is not None
@@ -96,6 +99,17 @@ class DashboardQueryService:
         application_task,
     ) -> DashboardJob:
         listing = self.database.get_job(snapshot.job_id)
+        material_package = self.materials.latest_for_job(snapshot.job_id)
+        material_summary = (
+            None
+            if material_package is None
+            else DashboardMaterialSummary(
+                package_id=material_package.id,
+                version=material_package.version,
+                review_status=material_package.review_status,
+                task_status=None,
+            )
+        )
         profile_summary = (
             None if profile is None else CandidateProfileSummary(
                 profile_id=profile.id,
@@ -123,6 +137,7 @@ class DashboardQueryService:
                     None if selection is None else selection.status
                 ),
                 application_task=application_task,
+                material=material_summary,
             )
         evaluation = translate_evaluation(
             evaluation,
@@ -171,6 +186,7 @@ class DashboardQueryService:
                 None if selection is None else selection.status
             ),
             application_task=application_task,
+            material=material_summary,
         )
 
     @staticmethod

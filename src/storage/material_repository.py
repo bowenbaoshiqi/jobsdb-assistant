@@ -234,6 +234,16 @@ class MaterialRepository:
             raise KeyError(package_id)
         return self._package_from_row(row)
 
+    def task_id_for_package(self, package_id: str) -> str:
+        with self.database._connect() as conn:
+            row = conn.execute(
+                "SELECT task_id FROM material_packages WHERE id = ?",
+                (package_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(package_id)
+        return str(row["task_id"])
+
     def latest_for_job(self, job_id: str) -> ApplicationPackage | None:
         versions = self.list_versions(job_id)
         return versions[0] if versions else None
