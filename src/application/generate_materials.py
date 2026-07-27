@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
-import shutil
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -27,9 +25,11 @@ from src.domain.material import (
     MaterialArtifact,
     MaterialReviewAction,
 )
+from src.materials.artifacts import (
+    count_cover_letter_words,
+    install_package_files,
+)
 from src.storage.material_repository import MaterialRepository
-
-_SAFE_JOB_ID = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 class ProfileProjector(Protocol):
@@ -218,8 +218,7 @@ class MaterialGenerationService:
         *,
         completed_at: datetime,
     ) -> ApplicationPackage:
-        if not _SAFE_JOB_ID.fullmatch(task.job_id):
-            raise ValueError("unsafe job id")
+        staging = self.checkpoints.staging_dir(task.task_id)
         resume = self.checkpoints.resolve_staged_path(
             task.task_id,
             result.resume_path,
@@ -228,48 +227,28 @@ class MaterialGenerationService:
             task.task_id,
             result.cover_letter_path,
         )
-        if not resume.read_bytes().startswith(b"%PDF-"):
-            raise ValueError("resume artifact is not a PDF")
         cover_text = cover.read_text(encoding="utf-8")
         if cover_text.strip() != result.cover_letter_text.strip():
             raise ValueError("cover letter artifact content mismatch")
-        target = (
-            self.materials_root
-            / task.job_id
-            / f"v{task.material_version}"
-        )
-        if target.exists():
-            raise ValueError("material version already exists")
-        temporary = target.with_name(f".{target.name}-{uuid.uuid4().hex}.tmp")
-        temporary.mkdir(parents=True)
-        try:
-            installed_resume = temporary / "cv.pdf"
-            installed_cover = temporary / "cover-letter.txt"
-            shutil.copyfile(resume, installed_resume)
-            shutil.copyfile(cover, installed_cover)
-            manifest = {
+        if (
+            count_cover_letter_words(cover_text)
+            != result.cover_letter_word_count
+        ):
+            raise ValueError("cover letter word count mismatch")
+        installed = install_package_files(
+            staging_root=staging,
+            resume_path=resume,
+            cover_letter_path=cover,
+            materials_root=self.materials_root,
+            job_id=task.job_id,
+            version=task.material_version,
+            manifest={
                 "task_id": task.task_id,
-                "job_id": task.job_id,
-                "version": task.material_version,
-                "resume_sha256": self._hash(installed_resume),
-                "cover_letter_sha256": self._hash(installed_cover),
                 "change_summary": result.change_summary,
                 "engine_provenance": result.engine_provenance,
                 "prompt_provenance": result.prompt_provenance,
-            }
-            (temporary / "manifest.json").write_text(
-                json.dumps(
-                    manifest,
-                    ensure_ascii=False,
-                    indent=2,
-                    sort_keys=True,
-                ),
-                encoding="utf-8",
-            )
-            temporary.replace(target)
-        except Exception:
-            shutil.rmtree(temporary, ignore_errors=True)
-            raise
+            },
+        )
         return ApplicationPackage(
             id=f"package-{uuid.uuid4().hex}",
             job_id=task.job_id,
@@ -277,12 +256,12 @@ class MaterialGenerationService:
             profile_version=task.profile_version,
             version=task.material_version,
             resume=MaterialArtifact(
-                path=str(target / "cv.pdf"),
-                sha256=self._hash(target / "cv.pdf"),
+                path=str(installed.resume_path),
+                sha256=installed.resume_sha256,
             ),
             cover_letter=MaterialArtifact(
-                path=str(target / "cover-letter.txt"),
-                sha256=self._hash(target / "cover-letter.txt"),
+                path=str(installed.cover_letter_path),
+                sha256=installed.cover_letter_sha256,
             ),
             cover_letter_word_count=result.cover_letter_word_count,
             reviewer=result.reviewer,
@@ -290,7 +269,3 @@ class MaterialGenerationService:
             facts=result.facts,
             created_at=completed_at,
         )
-
-    @staticmethod
-    def _hash(path: Path) -> str:
-        return hashlib.sha256(path.read_bytes()).hexdigest()

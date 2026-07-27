@@ -57,7 +57,7 @@ def test_submit_restart_and_regenerate_preserve_immutable_versions(
     pending = plan.pending[0]
     staging = checkpoints.staging_dir(pending.task.task_id)
     resume = staging / "cv.pdf"
-    resume.write_bytes(b"%PDF-1.7\nmaterial")
+    resume.write_bytes(b"%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n")
     cover = staging / "cover-letter.txt"
     cover.write_text(" ".join(["word"] * 120), encoding="utf-8")
 
