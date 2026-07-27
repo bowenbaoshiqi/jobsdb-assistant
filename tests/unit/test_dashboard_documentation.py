@@ -12,6 +12,18 @@ def test_readme_documents_reproducible_local_dashboard() -> None:
     assert "JobsDB default CV" in readme
     assert "no cover letter" in readme
     assert "Ctrl+C" in readme
+    assert "v0.5.0" in readme
+    assert "为已选职位生成定制材料" in readme
+    assert "100–300" in readme
+    assert "Reviewer" in readme
+    assert "ATS" in readme
+    assert "事实一致性" in readme
+    assert "批准" in readme
+    assert "拒绝" in readme
+    assert "重新生成" in readme
+    assert "v0.5 不会提交职位申请" in readme
+    assert "workspace/materials/" in readme
+    assert "下一个版本" in readme
 
 
 def test_canonical_skill_starts_dashboard_without_auto_clicking() -> None:
@@ -35,3 +47,10 @@ def test_claude_skill_delegates_dashboard_rules() -> None:
     assert "dashboard doctor" in instructions
     assert "dashboard start" in instructions
     assert "Dashboard confirmation" in instructions
+
+
+def test_ci_never_uploads_private_material_artifacts() -> None:
+    workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert "upload-artifact" not in workflow
+    assert "workspace/materials" not in workflow

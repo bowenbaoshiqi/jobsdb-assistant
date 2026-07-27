@@ -9,6 +9,7 @@ def test_guard_rejects_private_runtime_paths(tmp_path: Path) -> None:
         tracked=[
             "data/jobsdb.db",
             "workspace/applications/42/cv.pdf",
+            "workspace/materials/job-1/v1/cover-letter.txt",
             "integrations/candidate-profile/CLAUDE.md",
             "integrations/job-evaluation/modes/oferta.md",
             "accounts/personal.json",
@@ -20,6 +21,7 @@ def test_guard_rejects_private_runtime_paths(tmp_path: Path) -> None:
     assert {finding.path for finding in findings} == {
         "data/jobsdb.db",
         "workspace/applications/42/cv.pdf",
+        "workspace/materials/job-1/v1/cover-letter.txt",
         "integrations/candidate-profile/CLAUDE.md",
         "integrations/job-evaluation/modes/oferta.md",
         "accounts/personal.json",
