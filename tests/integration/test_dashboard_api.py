@@ -182,6 +182,7 @@ def test_dashboard_html_loads(
     response = client.get("/")
 
     assert response.status_code == 200
+    assert '<html lang="zh-CN">' in response.text
     assert "JobsDB 求职助手" in response.text
 
 
