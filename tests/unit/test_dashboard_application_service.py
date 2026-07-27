@@ -152,3 +152,88 @@ async def test_captcha_result_requires_attention() -> None:
     assert restored is not None
     assert restored.status is DashboardApplicationStatus.NEEDS_ATTENTION
     assert restored.error_message == "captcha"
+
+
+@pytest.mark.asyncio
+async def test_unknown_job_and_task_are_rejected() -> None:
+    runner = AsyncMock()
+    service, _database = _service(runner)
+
+    with pytest.raises(KeyError, match="missing-job"):
+        await service.start("missing-job", DEFAULT_REQUEST)
+    with pytest.raises(KeyError, match="missing-task"):
+        await service.execute("missing-task")
+
+
+@pytest.mark.asyncio
+async def test_terminal_task_execute_is_idempotent() -> None:
+    runner = AsyncMock(return_value={"success": 1})
+    service, _database = _service(runner)
+    task = await service.start("quick-1", DEFAULT_REQUEST)
+    await service.execute(task.id)
+
+    await service.execute(task.id)
+
+    runner.assert_awaited_once_with("quick-1")
+
+
+@pytest.mark.asyncio
+async def test_runner_exception_is_private_safe_failure() -> None:
+    runner = AsyncMock(side_effect=RuntimeError("secret detail"))
+    service, _database = _service(runner)
+    task = await service.start("quick-1", DEFAULT_REQUEST)
+
+    await service.execute(task.id)
+
+    restored = service.get(task.id)
+    assert restored is not None
+    assert restored.status is DashboardApplicationStatus.FAILED
+    assert restored.error_message == "quick_apply_runner_failed"
+    assert "secret" not in restored.model_dump_json()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("result", "status", "reason"),
+    [
+        (
+            {"error": "session_expired"},
+            DashboardApplicationStatus.NEEDS_ATTENTION,
+            "login_required",
+        ),
+        (
+            {"error": "complex_form"},
+            DashboardApplicationStatus.NEEDS_ATTENTION,
+            "complex_form",
+        ),
+        (
+            {"error": "rate_limited"},
+            DashboardApplicationStatus.FAILED,
+            "quick_apply_failed",
+        ),
+        (
+            {"skipped": 1},
+            DashboardApplicationStatus.FAILED,
+            "quick_apply_skipped",
+        ),
+        (
+            {},
+            DashboardApplicationStatus.FAILED,
+            "no_submission_recorded",
+        ),
+    ],
+)
+async def test_runner_outcomes_are_safely_classified(
+    result: dict,
+    status: DashboardApplicationStatus,
+    reason: str,
+) -> None:
+    service, _database = _service(AsyncMock(return_value=result))
+    task = await service.start("quick-1", DEFAULT_REQUEST)
+
+    await service.execute(task.id)
+
+    restored = service.get(task.id)
+    assert restored is not None
+    assert restored.status is status
+    assert restored.error_message == reason
