@@ -49,6 +49,23 @@ missing behavior. Focused GREEN suites passed after implementation.
 - `git diff --check`: passed.
 - Both pinned integrations passed local commit and required-path checks.
 
+## Local end-to-end acceptance
+
+A real local JobsDB snapshot completed the bundle-backed evaluation path:
+
+1. `evaluation-prepare` emitted a one-snapshot task containing the confirmed
+   profile identity, bundle hash, projection version, and exactly three native
+   profile context paths.
+2. A native ordered A-F result passed snapshot, profile, integration, and
+   schema validation and was saved to SQLite.
+3. `workflow report` rendered the saved current-profile evaluation.
+4. A second `evaluation-prepare` returned one cached result, excluded that
+   snapshot from pending work, and left the other unprocessed snapshots
+   pending.
+
+This acceptance used private ignored runtime data. No candidate content, JD
+body, task payload, or generated bundle is included in this evidence file.
+
 Known warnings are pre-existing Pydantic v1-validator deprecations and test
 resource warnings from legacy browser/application coverage tests. They do not
 change the result of this feature verification.
