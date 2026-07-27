@@ -14,7 +14,7 @@ def test_manifest_locks_approved_forks_and_required_capabilities() -> None:
         "https://github.com/bowenbaoshiqi/ai-job-search.git"
     )
     assert candidate.commit == "aa7c7073990492c9111fbdda48f6adde24a1d91b"
-    assert candidate.contract_version == "candidate-profile.v2"
+    assert candidate.contract_version == "candidate-profile.v3"
     assert ".claude/commands/setup.md" in candidate.required_paths
 
     evaluation = manifest.integrations["job-evaluation"]
@@ -23,8 +23,14 @@ def test_manifest_locks_approved_forks_and_required_capabilities() -> None:
     )
     assert evaluation.commit == "01bf8b469ad5177a9c30230bc00509ead8e006c2"
     assert (
+        evaluation.contract_version
+        == "career-ops-native-profile-bundle.v2"
+    )
+    assert (
         ".agents/skills/career-ops/SKILL.md" in evaluation.required_paths
     )
+    assert "modes/_shared.md" in evaluation.required_paths
+    assert "modes/oferta.md" in evaluation.required_paths
 
 
 def test_manifest_rejects_unapproved_owner(tmp_path: Path) -> None:

@@ -154,3 +154,18 @@ def test_workflow_report_is_human_readable(monkeypatch) -> None:
 
     assert result.exit_code == 0
     assert "JobsDB Evaluation Report" in result.stdout
+
+
+def test_agent_protocol_uses_native_profile_loading_order() -> None:
+    expected = (
+        "config/profile.yml → modes/_shared.md → "
+        "modes/_profile.md → modes/oferta.md → cv.md"
+    )
+    for path in (
+        Path(".agents/skills/jobsdb-assistant/SKILL.md"),
+        Path(".claude/skills/jobsdb-assistant/SKILL.md"),
+    ):
+        instructions = path.read_text(encoding="utf-8")
+        assert "profile_context_paths" in instructions
+        assert expected in instructions
+        assert "embedded confirmed profile" not in instructions
