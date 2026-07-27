@@ -13,6 +13,18 @@
         ".claude/skills/job-application-assistant/02-behavioral-profile.md"
       ]
     },
+    "application-material": {
+      "url": "https://github.com/bowenbaoshiqi/ai-job-search.git",
+      "commit": "aa7c7073990492c9111fbdda48f6adde24a1d91b",
+      "license": "MIT",
+      "contract_version": "application-material.v1",
+      "required_paths": [
+        "LICENSE",
+        ".claude/skills/job-application-assistant/SKILL.md",
+        ".claude/skills/job-application-assistant/05-cv-templates.md",
+        ".claude/skills/job-application-assistant/06-cover-letter-templates.md"
+      ]
+    },
     "job-evaluation": {
       "url": "https://github.com/bowenbaoshiqi/career-ops.git",
       "commit": "01bf8b469ad5177a9c30230bc00509ead8e006c2",
