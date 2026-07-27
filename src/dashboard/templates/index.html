@@ -4,11 +4,92 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>JobsDB Assistant</title>
+    <link rel="stylesheet" href="/static/dashboard.css">
+    <script src="/static/dashboard.js" defer></script>
   </head>
   <body>
-    <main>
-      <h1>JobsDB Assistant</h1>
-      <p>Local review Dashboard</p>
+    <main class="shell">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Local review Dashboard</p>
+          <h1>JobsDB Assistant</h1>
+        </div>
+        <div class="selected-summary">
+          <strong id="selected-count">0</strong>
+          <span>jobs selected</span>
+        </div>
+      </header>
+
+      <section class="summary-grid" aria-label="Batch summary">
+        <div><strong id="total-count">0</strong><span>Total</span></div>
+        <div><strong id="evaluated-count">0</strong><span>Evaluated</span></div>
+        <div><strong id="pending-count">0</strong><span>Pending</span></div>
+      </section>
+
+      <section class="filters" aria-label="Job filters">
+        <label class="toggle">
+          <input id="show-filter" type="checkbox">
+          <span>Show all jobs</span>
+        </label>
+        <label>
+          Minimum score
+          <select id="score-filter">
+            <option value="">All scores</option>
+            <option value="4.5">4.5+</option>
+            <option value="4">4.0+</option>
+            <option value="3">3.0+</option>
+          </select>
+        </label>
+        <label>
+          Application type
+          <select id="type-filter">
+            <option value="">All types</option>
+            <option value="quick_apply">Quick Apply</option>
+            <option value="apply">Apply</option>
+          </select>
+        </label>
+        <label>
+          Selection
+          <select id="selection-filter">
+            <option value="">All jobs</option>
+            <option value="true">Selected</option>
+            <option value="false">Not selected</option>
+          </select>
+        </label>
+        <label class="search-filter">
+          Title or company
+          <input id="query-filter" type="search" autocomplete="off">
+        </label>
+      </section>
+
+      <p id="dashboard-error" class="error" role="alert" hidden></p>
+      <p id="dashboard-status" class="sr-only" aria-live="polite"></p>
+      <section id="job-list" class="job-list" aria-label="Jobs"></section>
+
+      <dialog id="apply-confirmation">
+        <form method="dialog">
+          <h2>Direct Quick Apply</h2>
+          <p id="confirmation-job"></p>
+          <ul>
+            <li>Use the CV currently configured as your JobsDB default.</li>
+            <li>Do not tailor or upload a CV.</li>
+            <li>Do not include a cover letter.</li>
+            <li>A submitted application cannot be withdrawn by this system.</li>
+          </ul>
+          <div class="dialog-actions">
+            <button value="cancel">Cancel</button>
+            <button id="confirm-apply" value="confirm" class="primary">
+              Confirm application
+            </button>
+          </div>
+        </form>
+      </dialog>
+
+      <template id="future-actions">
+        <button>Direct apply with default CV</button>
+        <a>Open job and apply manually</a>
+        <button disabled>Tailored materials (later version)</button>
+      </template>
     </main>
   </body>
 </html>

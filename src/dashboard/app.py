@@ -1,8 +1,10 @@
 """FastAPI construction for the local review Dashboard."""
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from src.dashboard.application_service import DashboardApplicationService
 from src.dashboard.query_service import DashboardQueryService
@@ -30,5 +32,10 @@ def create_dashboard_app(
     )
     app.state.dashboard_dependencies = dependencies
     app.state.dashboard_tasks = set()
+    app.mount(
+        "/static",
+        StaticFiles(directory=Path(__file__).with_name("static")),
+        name="static",
+    )
     register_routes(app, dependencies)
     return app
