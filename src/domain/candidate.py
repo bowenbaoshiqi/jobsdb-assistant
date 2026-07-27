@@ -4,14 +4,15 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 
-
-class FactEvidence(BaseModel):
-    """Source locator supporting one verified candidate fact."""
-
-    model_config = ConfigDict(frozen=True)
-
-    source: str = Field(min_length=1)
-    locator: str = Field(min_length=1)
+from src.domain.candidate_cv import (
+    CandidateCv,
+    FactEvidence,
+    IntentSynthesis,
+)
+from src.domain.candidate_interview import (
+    InterviewAnswer,
+    InterviewDimension,
+)
 
 
 class CandidateProfileProposal(BaseModel):
@@ -30,6 +31,12 @@ class CandidateProfileProposal(BaseModel):
     writing_style: dict[str, str] = Field(default_factory=dict)
     source_documents: list[str] = Field(default_factory=list)
     star_examples: list[str] = Field(default_factory=list)
+    canonical_cv: CandidateCv | None = None
+    interview_answers: dict[
+        InterviewDimension,
+        InterviewAnswer,
+    ] = Field(default_factory=dict)
+    intent_syntheses: tuple[IntentSynthesis, ...] = ()
     created_at: datetime
 
 
@@ -50,6 +57,12 @@ class CandidateProfile(BaseModel):
     writing_style: dict[str, str] = Field(default_factory=dict)
     source_documents: list[str] = Field(default_factory=list)
     star_examples: list[str] = Field(default_factory=list)
+    canonical_cv: CandidateCv | None = None
+    interview_answers: dict[
+        InterviewDimension,
+        InterviewAnswer,
+    ] = Field(default_factory=dict)
+    intent_syntheses: tuple[IntentSynthesis, ...] = ()
     created_at: datetime
     confirmed_at: datetime | None = None
     content_hash: str | None = Field(

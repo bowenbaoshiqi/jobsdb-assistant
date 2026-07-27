@@ -6,6 +6,14 @@ from src.domain.candidate import (
     CandidateProfileProposal,
     FactEvidence,
 )
+from src.domain.candidate_cv import (
+    CandidateCv,
+    CandidateEducation,
+    CandidateExperience,
+    IntentSynthesis,
+    IntentTargetField,
+    SourcedText,
+)
 from src.domain.candidate_interview import (
     OPTIONAL_INTERVIEW_DIMENSIONS,
     REQUIRED_INTERVIEW_DIMENSIONS,
@@ -29,6 +37,9 @@ __all__ = [
     "ApplyType",
     "CandidateProfile",
     "CandidateProfileProposal",
+    "CandidateCv",
+    "CandidateEducation",
+    "CandidateExperience",
     "EvaluationCacheKey",
     "FactEvidence",
     "InterviewAnswer",
@@ -36,6 +47,8 @@ __all__ = [
     "InterviewAnswers",
     "InterviewDimension",
     "InterviewQuestion",
+    "IntentSynthesis",
+    "IntentTargetField",
     "Job",
     "JobEvaluation",
     "JobSnapshot",
@@ -43,4 +56,5 @@ __all__ = [
     "NativeDimension",
     "OPTIONAL_INTERVIEW_DIMENSIONS",
     "REQUIRED_INTERVIEW_DIMENSIONS",
+    "SourcedText",
 ]
