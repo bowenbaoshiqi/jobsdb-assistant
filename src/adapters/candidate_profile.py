@@ -11,6 +11,11 @@ from pydantic import (
 )
 
 from src.domain.candidate import CandidateProfileProposal
+from src.domain.candidate_cv import (
+    CandidateCv,
+    IntentSynthesis,
+    validate_intent_syntheses,
+)
 from src.domain.candidate_interview import (
     REQUIRED_INTERVIEW_DIMENSIONS,
     InterviewAnswer,
@@ -72,6 +77,8 @@ class ProfileQuestions(BaseModel):
 class ProfileProposalResult(BaseModel):
     kind: Literal["proposal"]
     task_id: str
+    canonical_cv: CandidateCv
+    intent_syntheses: tuple[IntentSynthesis, ...]
     profile: CandidateProfileProposal
 
     @model_validator(mode="after")
@@ -150,4 +157,17 @@ class CandidateProfileAdapter:
         )
         if result.task_id != task.task_id:
             raise ValueError("task id mismatch")
+        if isinstance(result, ProfileProposalResult):
+            syntheses = validate_intent_syntheses(
+                task.answers,
+                result.intent_syntheses,
+            )
+            profile = result.profile.model_copy(
+                update={
+                    "canonical_cv": result.canonical_cv,
+                    "interview_answers": dict(task.answers),
+                    "intent_syntheses": syntheses,
+                }
+            )
+            return result.model_copy(update={"profile": profile})
         return result

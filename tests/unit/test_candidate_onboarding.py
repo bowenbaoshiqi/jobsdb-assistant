@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -34,9 +35,36 @@ def service(tmp_path: Path) -> CandidateOnboarding:
 
 
 def proposal_payload(task_id: str, proposal_id: str = "proposal-1") -> dict:
+    answers = complete_answers_payload()
     return {
         "kind": "proposal",
         "task_id": task_id,
+        "canonical_cv": {
+            "full_name": {
+                "value": "Synthetic Candidate",
+                "evidence": [{"source": "cv.md", "locator": "name"}],
+            }
+        },
+        "intent_syntheses": [
+            {
+                "dimension": dimension.value,
+                "answer_hash": sha256(
+                    (
+                        answer["value"]
+                        if answer["status"] == "answered"
+                        else answer["status"]
+                    ).encode()
+                ).hexdigest(),
+                "summary": (
+                    f"Synthesis for {dimension.value}"
+                    if answer["status"] == "answered"
+                    else None
+                ),
+                "target_field": dimension.value,
+            }
+            for dimension in REQUIRED_INTERVIEW_DIMENSIONS
+            for answer in [answers[dimension.value]]
+        ],
         "profile": {
             "id": proposal_id,
             "verified_facts": {"skills": ["Python"]},
@@ -164,6 +192,12 @@ def test_complete_interview_then_proposal_can_be_confirmed(
     assert review.status is OnboardingStatus.WAITING_FOR_USER
     profile = onboarding.confirm("proposal-1", confirmed_at=NOW)
     assert profile.version == 1
+    assert profile.canonical_cv is not None
+    assert profile.canonical_cv.full_name is not None
+    assert profile.canonical_cv.full_name.value == "Synthetic Candidate"
+    assert profile.interview_answers[
+        InterviewDimension.CAREER_GOALS
+    ].value == "Answer for career_goals"
 
 
 def test_later_run_reuses_active_profile_without_new_task(
