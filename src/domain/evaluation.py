@@ -73,6 +73,8 @@ class EvaluationCacheKey(BaseModel):
 
     snapshot_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
     profile_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    profile_bundle_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    profile_projection_version: str = Field(min_length=1)
     engine_commit: str = Field(pattern=r"^[a-f0-9]{40}$")
     contract_version: str = Field(min_length=1)
 

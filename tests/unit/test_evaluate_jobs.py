@@ -1,8 +1,8 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
-from src.adapters.checkpoint_io import CheckpointStore
 from src.adapters.career_ops_profile import CareerOpsProfileBundle
+from src.adapters.checkpoint_io import CheckpointStore
 from src.adapters.job_evaluation import JobEvaluationAdapter
 from src.application.evaluate_jobs import EvaluationService
 from src.domain.candidate import CandidateProfile

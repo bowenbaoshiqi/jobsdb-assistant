@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 from typing import Protocol
 
+from src.adapters.career_ops_profile import CareerOpsProfileBundle
 from src.adapters.checkpoint_io import CheckpointStore
 from src.adapters.job_evaluation import (
     JobEvaluationAdapter,
@@ -28,6 +29,13 @@ class EvaluationStore(Protocol):
     ) -> None: ...
 
 
+class ProfileProjector(Protocol):
+    def project(
+        self,
+        profile: CandidateProfile,
+    ) -> CareerOpsProfileBundle: ...
+
+
 @dataclass(frozen=True)
 class PendingEvaluation:
     snapshot_id: str
@@ -47,14 +55,17 @@ class EvaluationService:
         evaluations: EvaluationStore,
         adapter: JobEvaluationAdapter,
         checkpoints: CheckpointStore,
+        profile_projector: ProfileProjector,
     ) -> None:
         self.evaluations = evaluations
         self.adapter = adapter
         self.checkpoints = checkpoints
+        self.profile_projector = profile_projector
 
     def cache_key(
         self,
         profile: CandidateProfile,
+        bundle: CareerOpsProfileBundle,
         snapshot: CurrentSnapshotRecord,
     ) -> EvaluationCacheKey:
         if profile.content_hash is None:
@@ -62,6 +73,8 @@ class EvaluationService:
         return EvaluationCacheKey(
             snapshot_hash=snapshot.content_hash,
             profile_hash=profile.content_hash,
+            profile_bundle_hash=bundle.bundle_hash,
+            profile_projection_version=bundle.projection_version,
             engine_commit=self.adapter.integration_commit,
             contract_version=self.adapter.contract_version,
         )
@@ -74,11 +87,12 @@ class EvaluationService:
     ) -> EvaluationPlan:
         cached: list[JobEvaluation] = []
         pending: list[PendingEvaluation] = []
+        bundle = self.profile_projector.project(profile)
         for snapshot in sorted(
             snapshots,
             key=lambda item: item.snapshot_id,
         ):
-            key = self.cache_key(profile, snapshot)
+            key = self.cache_key(profile, bundle, snapshot)
             existing = self.evaluations.find_by_cache_key(key)
             if existing is not None:
                 cached.append(existing)
@@ -90,6 +104,7 @@ class EvaluationService:
             task = self.adapter.build_task(
                 task_id,
                 profile,
+                bundle,
                 [snapshot],
             )
             self.checkpoints.write_task(
@@ -132,5 +147,14 @@ class EvaluationService:
         return PendingEvaluation(
             snapshot_id=snapshot.snapshot_id,
             task=task,
-            cache_key=self.cache_key(task.profile, snapshot),
+            cache_key=EvaluationCacheKey(
+                snapshot_hash=snapshot.content_hash,
+                profile_hash=task.profile_hash,
+                profile_bundle_hash=task.profile_bundle_hash,
+                profile_projection_version=(
+                    task.profile_projection_version
+                ),
+                engine_commit=task.integration_commit,
+                contract_version=task.contract_version,
+            ),
         )

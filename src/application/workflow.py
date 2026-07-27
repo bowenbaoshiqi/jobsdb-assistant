@@ -121,6 +121,11 @@ class CandidateEvaluationWorkflow:
         profile = self.profiles.get_active()
         if profile is None:
             raise ValueError("confirmed candidate profile is required")
+        if profile.canonical_cv is None:
+            raise ValueError(
+                "active candidate profile requires explicit update "
+                "before career-ops evaluation"
+            )
         return self.evaluations.plan(
             run_id,
             profile,

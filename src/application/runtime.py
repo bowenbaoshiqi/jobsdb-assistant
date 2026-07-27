@@ -4,6 +4,7 @@ from pathlib import Path
 
 from config.settings import get_config
 from src.adapters.candidate_profile import CandidateProfileAdapter
+from src.adapters.career_ops_profile import CareerOpsProfileAdapter
 from src.adapters.checkpoint_io import CheckpointStore
 from src.adapters.job_evaluation import JobEvaluationAdapter
 from src.application.candidate_onboarding import CandidateOnboarding
@@ -37,6 +38,17 @@ def build_workflow(
                 candidate_spec.contract_version,
             ),
             checkpoints,
+            CareerOpsProfileAdapter(
+                workspace_root=(
+                    root / "workspace" / "career-ops-profiles"
+                ),
+                candidate_integration_commit=candidate_spec.commit,
+                career_ops_integration_commit=evaluation_spec.commit,
+                forbidden_roots=(
+                    root / "integrations" / "candidate-profile",
+                    root / "integrations" / "job-evaluation",
+                ),
+            ),
         ),
         evaluations=EvaluationService(
             evaluation_repository,
