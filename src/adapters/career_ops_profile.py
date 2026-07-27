@@ -13,7 +13,11 @@ import yaml
 from pydantic import BaseModel, ConfigDict
 
 from src.domain.candidate import CandidateProfile
-from src.domain.candidate_cv import CandidateCv, IntentSynthesis
+from src.domain.candidate_cv import (
+    CandidateCv,
+    IntentSynthesis,
+    validate_intent_syntheses,
+)
 from src.domain.candidate_interview import (
     InterviewAnswerStatus,
     InterviewDimension,
@@ -166,6 +170,10 @@ class CareerOpsProfileAdapter:
             raise ValueError(
                 "projection requires a confirmed canonical candidate profile"
             )
+        validate_intent_syntheses(
+            profile.interview_answers,
+            profile.intent_syntheses,
+        )
 
     def _validate_workspace(self) -> None:
         for forbidden in self.forbidden_roots:
@@ -270,6 +278,8 @@ class CareerOpsProfileAdapter:
         )
         if culture:
             data["culture_screen"] = {"require": culture}
+        if cv.location is not None:
+            data["location"] = {"city": cv.location.value}
 
         omitted: list[dict[str, str]] = []
         compensation_answer = profile.interview_answers.get(
@@ -326,6 +336,7 @@ class CareerOpsProfileAdapter:
             "target_roles.archetypes": "candidate.intent_syntheses",
             "narrative": "candidate.canonical_cv",
             "culture_screen.require": "candidate.intent_syntheses",
+            "location.city": "candidate.canonical_cv.location",
             "language.output": "candidate.writing_style.language",
         }
         return data, sources, omitted
@@ -433,6 +444,10 @@ class CareerOpsProfileAdapter:
             "## Deal-breakers",
             "",
             summary(InterviewDimension.DEAL_BREAKERS),
+            "",
+            "## Compensation Expectations",
+            "",
+            summary(InterviewDimension.SALARY_EXPECTATIONS),
             "",
             "## Proof Points",
             "",
