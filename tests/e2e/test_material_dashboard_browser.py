@@ -140,7 +140,9 @@ async def test_material_page_previews_and_reviews_without_submit(
     await mock_page.route("**/api/materials/package-1", api_handler)
     await mock_page.goto(f"{material_dashboard}/materials/package-1")
 
-    assert await mock_page.get_by_text("团队规模需要确认").is_visible()
+    assert await mock_page.locator("#fact-warning").get_by_text(
+        "团队规模需要确认"
+    ).is_visible()
     assert await mock_page.get_by_text("建议强化领导力").is_visible()
     assert await mock_page.get_by_text("建议加入 LLM 关键词").is_visible()
     await mock_page.get_by_label("我确认覆盖事实风险警告").check()

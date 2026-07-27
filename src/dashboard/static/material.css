@@ -1,0 +1,120 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  color: #172033;
+  background: #f4f6fa;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, textarea { font: inherit; }
+a { color: #2458c5; }
+
+.material-shell {
+  width: min(1280px, calc(100% - 2rem));
+  margin: 2rem auto 4rem;
+}
+
+.material-header,
+.panel-heading,
+.review-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.eyebrow {
+  margin: 1rem 0 0.2rem;
+  color: #62708a;
+  font-size: 0.8rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+
+h1, h2, p { margin-top: 0; }
+h2 { font-size: 1.05rem; }
+.muted { color: #62708a; }
+
+.status-badge {
+  border-radius: 999px;
+  padding: 0.45rem 0.75rem;
+  background: #e8eef9;
+  font-weight: 700;
+}
+
+.preview-grid,
+.checks-grid {
+  display: grid;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.preview-grid { grid-template-columns: 1.4fr 1fr; }
+.checks-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+.panel {
+  border: 1px solid #dbe1eb;
+  border-radius: 0.65rem;
+  padding: 1rem;
+  background: #fff;
+}
+
+#resume-preview {
+  width: 100%;
+  min-height: 48rem;
+  border: 1px solid #dbe1eb;
+}
+
+#cover-letter-preview {
+  min-height: 32rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  font: inherit;
+  line-height: 1.6;
+}
+
+button,
+.button-link {
+  min-height: 2.35rem;
+  border: 1px solid #b9c2d1;
+  border-radius: 0.45rem;
+  padding: 0.45rem 0.75rem;
+  color: #172033;
+  background: #fff;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.primary {
+  border-color: #2458c5;
+  color: #fff;
+  background: #2458c5;
+}
+
+.fact-warning,
+.error {
+  margin: 1rem 0;
+  border: 1px solid #d47a36;
+  border-radius: 0.6rem;
+  padding: 1rem;
+  color: #702d00;
+  background: #fff4e8;
+}
+
+.error {
+  border-color: #da8b8b;
+  color: #8b2020;
+  background: #fff1f1;
+}
+
+.message { color: #2458c5; font-weight: 650; }
+.review-panel label { display: grid; gap: 0.4rem; margin: 0.8rem 0; }
+.review-panel .override { display: block; }
+textarea { width: 100%; padding: 0.6rem; }
+.review-actions { justify-content: flex-start; flex-wrap: wrap; }
+
+@media (max-width: 850px) {
+  .preview-grid,
+  .checks-grid { grid-template-columns: 1fr; }
+  .material-header { align-items: flex-start; }
+}

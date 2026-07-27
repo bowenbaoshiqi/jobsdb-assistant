@@ -33,6 +33,14 @@ def register_routes(app: FastAPI, dependencies) -> None:
             context={},
         )
 
+    @app.get("/materials/{package_id}", response_class=HTMLResponse)
+    async def material_preview(request: Request, package_id: str):
+        return _TEMPLATES.TemplateResponse(
+            request=request,
+            name="material.html",
+            context={"package_id": package_id},
+        )
+
     @app.get("/health")
     async def health() -> dict[str, str]:
         try:

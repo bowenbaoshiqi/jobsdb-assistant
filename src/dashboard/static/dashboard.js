@@ -22,6 +22,9 @@ const elements = {
   progressCompleted: document.querySelector("#progress-completed"),
   progressFailed: document.querySelector("#progress-failed"),
   refreshResults: document.querySelector("#refresh-results"),
+  generateMaterials: document.querySelector("#generate-materials"),
+  materialBatchStatus: document.querySelector("#material-batch-status"),
+  materialBatchNote: document.querySelector("#material-batch-note"),
 };
 
 let currentPage = null;
@@ -167,10 +170,13 @@ function renderActions(job, checkbox) {
     actions.append(manual);
   }
 
-  const future = text("button", "定制申请材料（后续版本）");
-  future.type = "button";
-  future.disabled = true;
-  actions.append(future);
+  if (job.material?.package_id) {
+    const preview = text("a", `预览定制材料 v${job.material.version}`, "button-link primary");
+    preview.href = `/materials/${encodeURIComponent(job.material.package_id)}`;
+    actions.append(preview);
+  } else if (job.selected) {
+    actions.append(text("span", "等待生成定制材料", "material-state"));
+  }
 
   checkbox.disabled = job.application_task?.status === "applying";
   return actions;
@@ -245,6 +251,7 @@ async function updateSelection(job, checkbox) {
     job.selection_status = intended ? "waiting_for_materials" : null;
     currentPage.summary.selected += intended ? 1 : -1;
     elements.selectedCount.textContent = currentPage.summary.selected;
+    elements.generateMaterials.disabled = currentPage.summary.selected === 0;
     setStatus(`${job.title} 已${intended ? "选择" : "取消选择"}。`);
   } catch (error) {
     checkbox.checked = !intended;
@@ -312,6 +319,7 @@ async function loadJobs({ preserveContentOnError = false } = {}) {
     elements.evaluatedCount.textContent = currentPage.summary.evaluated;
     elements.pendingCount.textContent = currentPage.summary.pending;
     elements.selectedCount.textContent = currentPage.summary.selected;
+    elements.generateMaterials.disabled = currentPage.summary.selected === 0;
     const cards = currentPage.jobs.map(renderJob);
     elements.list.replaceChildren(
       ...(cards.length ? cards : [text("p", "没有符合当前筛选条件的职位。", "muted")]),
@@ -319,6 +327,27 @@ async function loadJobs({ preserveContentOnError = false } = {}) {
   } catch (error) {
     if (!preserveContentOnError) elements.list.replaceChildren();
     setError(error.message);
+  }
+}
+
+async function generateSelectedMaterials() {
+  elements.generateMaterials.disabled = true;
+  elements.generateMaterials.textContent = "正在创建任务…";
+  setError();
+  try {
+    const response = await fetch("/api/material-batches", { method: "POST" });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "无法创建材料生成任务。");
+    elements.materialBatchStatus.hidden = false;
+    elements.materialBatchNote.textContent =
+      `批次 ${payload.batch_id}：已创建 ${payload.tasks.length} 个独立职位任务。` +
+      "请保持当前 CC/Codex Agent 会话运行，完成后手动刷新页面。";
+    setStatus(`已创建 ${payload.tasks.length} 个材料生成任务。`);
+  } catch (error) {
+    setError(error.message);
+  } finally {
+    elements.generateMaterials.disabled = !currentPage?.summary.selected;
+    elements.generateMaterials.textContent = "为已选职位生成定制材料";
   }
 }
 
@@ -379,6 +408,7 @@ elements.dialog.addEventListener("close", () => {
   else pendingApplyJob = null;
 });
 elements.refreshResults.addEventListener("click", refreshDashboard);
+elements.generateMaterials.addEventListener("click", generateSelectedMaterials);
 
 filtersFromUrl();
 loadJobs();
