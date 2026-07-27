@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from hashlib import sha256
 
 import pytest
 from pydantic import ValidationError
@@ -60,9 +61,60 @@ def complete_answers() -> dict[str, dict[str, str]]:
 
 
 def proposal_payload(task_id: str) -> dict:
+    answers = complete_answers()
     return {
         "kind": "proposal",
         "task_id": task_id,
+        "canonical_cv": {
+            "full_name": {
+                "value": "Synthetic Candidate",
+                "evidence": [
+                    {"source": "cv.pdf", "locator": "page 1"}
+                ],
+            },
+            "experience": [
+                {
+                    "role": {
+                        "value": "AI Architect",
+                        "evidence": [
+                            {"source": "cv.pdf", "locator": "experience"}
+                        ],
+                    },
+                    "company": {
+                        "value": "Example Group",
+                        "evidence": [
+                            {"source": "cv.pdf", "locator": "experience"}
+                        ],
+                    },
+                    "period": {
+                        "value": "2022-present",
+                        "evidence": [
+                            {"source": "cv.pdf", "locator": "experience"}
+                        ],
+                    },
+                }
+            ],
+        },
+        "intent_syntheses": [
+            {
+                "dimension": dimension.value,
+                "answer_hash": sha256(
+                    (
+                        answer["value"]
+                        if answer["status"] == "answered"
+                        else answer["status"]
+                    ).encode()
+                ).hexdigest(),
+                "summary": (
+                    f"Synthesis for {dimension.value}"
+                    if answer["status"] == "answered"
+                    else None
+                ),
+                "target_field": dimension.value,
+            }
+            for dimension in REQUIRED_INTERVIEW_DIMENSIONS
+            for answer in [answers[dimension.value]]
+        ],
         "profile": {
             "id": "proposal-1",
             "verified_facts": {"skills": ["Python"]},
@@ -225,6 +277,53 @@ def test_explicit_skip_answers_complete_interview() -> None:
         task=task,
     )
     assert isinstance(proposal, ProfileProposalResult)
+    assert proposal.profile.canonical_cv is not None
+    assert proposal.profile.interview_answers == task.answers
+    assert len(proposal.profile.intent_syntheses) == len(
+        REQUIRED_INTERVIEW_DIMENSIONS
+    )
+
+
+def test_agent_cannot_replace_raw_interview_answers() -> None:
+    candidate_adapter = adapter()
+    answers = candidate_adapter.validate_answers(complete_answers())
+    task = candidate_adapter.build_task(
+        "profile-run-raw-answers",
+        ["cv.pdf"],
+        answers,
+    )
+    payload = proposal_payload(task.task_id)
+    payload["profile"]["interview_answers"] = {
+        InterviewDimension.CAREER_GOALS.value: {
+            "status": "answered",
+            "value": "Agent replacement",
+        }
+    }
+
+    proposal = candidate_adapter.validate_result(payload, task=task)
+
+    assert isinstance(proposal, ProfileProposalResult)
+    assert proposal.profile.interview_answers == task.answers
+    assert (
+        proposal.profile.interview_answers[
+            InterviewDimension.CAREER_GOALS
+        ].value
+        == "Answer for career_goals"
+    )
+
+
+def test_proposal_rejects_missing_intent_synthesis() -> None:
+    candidate_adapter = adapter()
+    task = candidate_adapter.build_task(
+        "profile-run-incomplete-synthesis",
+        ["cv.pdf"],
+        candidate_adapter.validate_answers(complete_answers()),
+    )
+    payload = proposal_payload(task.task_id)
+    payload["intent_syntheses"].pop()
+
+    with pytest.raises(ValueError, match="intent synthesis coverage"):
+        candidate_adapter.validate_result(payload, task=task)
 
 
 def test_candidate_adapter_rejects_fact_without_evidence() -> None:
@@ -240,6 +339,12 @@ def test_candidate_adapter_rejects_fact_without_evidence() -> None:
             {
                 "kind": "proposal",
                 "task_id": task.task_id,
+                "canonical_cv": proposal_payload(task.task_id)[
+                    "canonical_cv"
+                ],
+                "intent_syntheses": proposal_payload(task.task_id)[
+                    "intent_syntheses"
+                ],
                 "profile": {
                     "id": "proposal-1",
                     "verified_facts": {"skills": ["Python"]},
