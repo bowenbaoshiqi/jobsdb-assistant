@@ -164,3 +164,19 @@ def test_dashboard_html_loads(
 
     assert response.status_code == 200
     assert "JobsDB Assistant" in response.text
+
+
+def test_page_contains_review_and_safe_action_controls(
+    dashboard_api: tuple[TestClient, AsyncMock],
+) -> None:
+    client, _runner = dashboard_api
+
+    html = client.get("/").text
+
+    assert 'id="job-list"' in html
+    assert 'id="selected-count"' in html
+    assert 'id="show-filter"' in html
+    assert "Direct apply with default CV" in html
+    assert "Open job and apply manually" in html
+    assert "Tailored materials (later version)" in html
+    assert 'id="apply-confirmation"' in html
