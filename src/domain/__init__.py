@@ -29,7 +29,15 @@ from src.domain.evaluation import (
     NativeDimension,
 )
 from src.domain.job import ApplyType, Job, JobSnapshot
-from src.domain.material import ApplicationPackage, MaterialArtifact
+from src.domain.material import (
+    ApplicationPackage,
+    MaterialArtifact,
+    MaterialCheck,
+    MaterialReviewAction,
+    MaterialReviewEvent,
+    MaterialReviewStatus,
+    MaterialTaskStatus,
+)
 
 __all__ = [
     "ApplicationPackage",
@@ -53,6 +61,11 @@ __all__ = [
     "JobEvaluation",
     "JobSnapshot",
     "MaterialArtifact",
+    "MaterialCheck",
+    "MaterialReviewAction",
+    "MaterialReviewEvent",
+    "MaterialReviewStatus",
+    "MaterialTaskStatus",
     "NativeDimension",
     "OPTIONAL_INTERVIEW_DIMENSIONS",
     "REQUIRED_INTERVIEW_DIMENSIONS",
