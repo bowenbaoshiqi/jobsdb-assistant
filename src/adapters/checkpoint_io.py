@@ -26,6 +26,30 @@ class CheckpointStore:
             raise ValueError("invalid task id")
         return self.root / task_id
 
+    def staging_dir(self, task_id: str) -> Path:
+        """Create and return the private staging directory for one task."""
+        task_dir = self._task_dir(task_id)
+        if not (task_dir / "task.json").is_file():
+            raise FileNotFoundError(task_id)
+        staging = task_dir / "staging"
+        staging.mkdir(exist_ok=True)
+        if staging.is_symlink():
+            raise ValueError("staging directory must not be a symlink")
+        return staging
+
+    def resolve_staged_path(self, task_id: str, value: str) -> Path:
+        """Resolve an Agent-produced path and require it to stay in staging."""
+        staging = self.staging_dir(task_id).resolve()
+        candidate = Path(value)
+        if not candidate.is_absolute():
+            candidate = self._task_dir(task_id) / candidate
+        resolved = candidate.resolve()
+        if not resolved.is_relative_to(staging):
+            raise ValueError("artifact path must remain inside task staging")
+        if candidate.is_symlink() or not resolved.is_file():
+            raise ValueError("artifact must be a regular staged file")
+        return resolved
+
     def write_task(
         self,
         task_id: str,

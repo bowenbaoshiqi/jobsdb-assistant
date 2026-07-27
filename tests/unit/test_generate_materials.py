@@ -9,7 +9,7 @@ from src.adapters.checkpoint_io import CheckpointStore
 from src.application.generate_materials import MaterialGenerationService
 from src.domain.candidate import CandidateProfile
 from src.domain.evaluation import JobEvaluation, NativeDimension
-from src.domain.job import ApplyType, CurrentSnapshotRecord
+from src.domain.job import ApplyType, CurrentSnapshotRecord, JobDetailCapture
 from src.storage.database import Database
 from src.storage.material_repository import MaterialRepository
 
@@ -84,20 +84,24 @@ def _evaluation(snapshot: CurrentSnapshotRecord) -> JobEvaluation:
 
 def _service(tmp_path: Path):
     database = Database(":memory:")
-    snapshots = [_snapshot(index) for index in range(1, 6)]
-    for snapshot in snapshots:
+    snapshots: list[CurrentSnapshotRecord] = []
+    for index in range(1, 6):
+        snapshot = _snapshot(index)
         database.save_discovered_job(
-            {
-                "jobsdb_job_id": snapshot.job_id,
-                "canonical_url": snapshot.canonical_url,
-                "title": snapshot.title,
-                "company": snapshot.company,
-                "location": "Hong Kong",
-                "jd_text": snapshot.jd_text,
-                "apply_type": snapshot.apply_type,
-            },
+            JobDetailCapture(
+                jobsdb_job_id=snapshot.job_id,
+                canonical_url=snapshot.canonical_url,
+                title=snapshot.title,
+                company=snapshot.company,
+                location="Hong Kong",
+                jd_text=snapshot.jd_text,
+                apply_type=snapshot.apply_type,
+            ),
             captured_at=NOW,
         )
+        stored = database.get_current_job_snapshot_record(snapshot.job_id)
+        assert stored is not None
+        snapshots.append(stored)
     repository = MaterialRepository(database)
     checkpoints = CheckpointStore(tmp_path / "tasks")
     service = MaterialGenerationService(
@@ -178,7 +182,9 @@ def test_invalid_result_fails_only_its_own_task(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         service.submit(plan.pending[0], {"task_id": "wrong"}, completed_at=NOW)
 
-    tasks = repository.list_batch("batch-1")
-    assert tasks[0].status.value == "failed"
-    assert tasks[1].status.value == "waiting_for_agent"
-
+    tasks = {item.id: item for item in repository.list_batch("batch-1")}
+    assert tasks[plan.pending[0].task.task_id].status.value == "failed"
+    assert (
+        tasks[plan.pending[1].task.task_id].status.value
+        == "waiting_for_agent"
+    )

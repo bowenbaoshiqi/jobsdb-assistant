@@ -2,9 +2,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from src.adapters.checkpoint_io import CheckpointStore
-from src.application.generate_materials import MaterialGenerationService
 from src.domain.material import MaterialTaskStatus
-
 from tests.unit.test_generate_materials import (
     _evaluation,
     _profile,
