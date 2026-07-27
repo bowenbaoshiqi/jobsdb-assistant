@@ -66,6 +66,19 @@ def register_routes(app: FastAPI, dependencies) -> None:
         )
         return dependencies.query_service.list_jobs(filters)
 
+    @app.get("/api/evaluation-progress")
+    async def evaluation_progress():
+        if dependencies.evaluation_progress is None:
+            return {
+                "status": "idle",
+                "total": 0,
+                "queued": 0,
+                "running": 0,
+                "completed": 0,
+                "failed": 0,
+            }
+        return dependencies.evaluation_progress.get()
+
     @app.put("/api/selections/{job_id}")
     async def select(job_id: str):
         try:

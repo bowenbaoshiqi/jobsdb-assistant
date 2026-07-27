@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from src.dashboard.application_service import DashboardApplicationService
+from src.dashboard.evaluation_progress import EvaluationProgressStore
 from src.dashboard.query_service import DashboardQueryService
 from src.dashboard.routes import register_routes
 from src.storage.database import Database
@@ -19,6 +20,7 @@ class DashboardDependencies:
     query_service: DashboardQueryService
     selection_repository: SelectionRepository
     application_service: DashboardApplicationService
+    evaluation_progress: EvaluationProgressStore | None = None
 
 
 def create_dashboard_app(

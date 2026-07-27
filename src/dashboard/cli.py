@@ -7,6 +7,7 @@ import urllib.request
 import webbrowser
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 
 import uvicorn
 
@@ -14,6 +15,7 @@ from config.settings import get_config
 from src.accounts.registry import AccountRegistry
 from src.dashboard.app import DashboardDependencies, create_dashboard_app
 from src.dashboard.application_service import DashboardApplicationService
+from src.dashboard.evaluation_progress import EvaluationProgressStore
 from src.dashboard.query_service import DashboardQueryService
 from src.orchestrator import Orchestrator
 from src.storage.database import Database
@@ -162,6 +164,9 @@ def build_production_app():
             query_service=DashboardQueryService(database),
             selection_repository=SelectionRepository(database),
             application_service=application_service,
+            evaluation_progress=EvaluationProgressStore(
+                Path("workspace/dashboard/evaluation-progress.json")
+            ),
         )
     )
 

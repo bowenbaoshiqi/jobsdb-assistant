@@ -114,6 +114,44 @@ p {
   color: #62708a;
 }
 
+.progress-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border: 1px solid #c9d7f2;
+  border-radius: 0.6rem;
+  background: #f4f7fd;
+}
+
+.progress-panel h2 {
+  margin-bottom: 0.25rem;
+  font-size: 1.15rem;
+}
+
+.progress-panel p {
+  margin-bottom: 0;
+}
+
+.progress-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+}
+
+.progress-counts span {
+  min-width: 4.5rem;
+  color: #52617a;
+}
+
+.progress-counts strong {
+  display: block;
+  color: #172033;
+  font-size: 1.15rem;
+}
+
 .filters {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -321,7 +359,8 @@ dialog::backdrop {
   }
 
   .page-header,
-  .job-heading {
+  .job-heading,
+  .progress-panel {
     align-items: flex-start;
     flex-direction: column;
   }

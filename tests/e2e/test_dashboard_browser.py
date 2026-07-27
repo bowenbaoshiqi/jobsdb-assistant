@@ -80,12 +80,12 @@ async def test_selection_and_filters_survive_refresh(
     mock_page,
 ) -> None:
     await mock_page.goto(live_dashboard)
-    await mock_page.get_by_label("Show all jobs").check()
-    await mock_page.get_by_label("Select Head of AI").check()
+    await mock_page.get_by_label("显示全部职位").check()
+    await mock_page.get_by_label("选择 Head of AI").check()
     await mock_page.reload()
 
-    assert await mock_page.get_by_label("Show all jobs").is_checked()
-    assert await mock_page.get_by_label("Select Head of AI").is_checked()
+    assert await mock_page.get_by_label("显示全部职位").is_checked()
+    assert await mock_page.get_by_label("选择 Head of AI").is_checked()
     assert "show=all" in mock_page.url
 
 
@@ -98,6 +98,8 @@ async def test_apply_controls_are_type_specific(
 
     assert await mock_page.get_by_role(
         "button",
-        name="Direct apply with default CV",
+        name="使用默认简历直接投递",
     ).is_visible()
-    assert await mock_page.get_by_text("Pending evaluation").is_visible()
+    assert await mock_page.locator("#job-list").get_by_text(
+        "待评分"
+    ).is_visible()
