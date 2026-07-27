@@ -20,6 +20,8 @@ discover --keyword
 workflow evaluation-prepare
 workflow evaluation-submit
 workflow report
+dashboard doctor
+dashboard start
 ```
 
 Read each task from `workspace/ai-tasks/<task_id>/task.json`, then read only
@@ -43,4 +45,8 @@ JobsDB discovery is public browser navigation and never uses credentials or
 login. Do not request password configuration during discovery.
 
 Do not modify integration checkouts, update fork revisions, combine scoring
-systems, create application materials, or run application execution.
+systems, or create application materials. Keep `dashboard start` in the
+foreground. Application execution is allowed only after the user's Dashboard confirmation:
+Quick Apply uses the JobsDB default CV with no cover letter, while Apply
+remains manual. The Agent must not call the application endpoint or confirm it
+on the user's behalf.

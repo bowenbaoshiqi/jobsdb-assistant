@@ -1,6 +1,6 @@
 ---
 name: jobsdb-assistant
-description: Run the local JobsDB Hong Kong candidate-profile and job-evaluation workflow. Use when the user asks to initialize or update their candidate profile, discover JobsDB roles for one keyword, score current roles with native career-ops A-F evaluation, or generate the local evaluation report. Keep the current Codex or compatible agent session active until Python reports completion.
+description: Run the local JobsDB Hong Kong candidate-profile, job-evaluation, and review Dashboard workflow. Use when the user asks to initialize or update their candidate profile, discover JobsDB roles for one keyword, score current roles with native career-ops A-F evaluation, generate the local evaluation report, or open the local review Dashboard. Keep the current Codex or compatible agent session active until Python reports completion.
 ---
 
 # JobsDB Candidate and Evaluation Workflow
@@ -111,7 +111,7 @@ configure credentials for this stage.
 uv run python -m src.main discover --keyword "KEYWORD"
 ```
 
-Do not apply to jobs in this skill.
+Discovery itself never applies to jobs.
 
 ## 3. Prepare and service evaluations
 
@@ -158,3 +158,27 @@ uv run python -m src.main workflow report
 
 Return the complete report and identify any failed task IDs. Do not expose
 full private source documents or raw task payloads.
+
+## 5. Start the local review Dashboard
+
+After discovery/evaluation, or whenever the user explicitly asks to review
+the current local results, run:
+
+```bash
+uv run python -m src.main dashboard doctor
+uv run python -m src.main dashboard start
+```
+
+Keep the foreground Agent session active until the user stops the service or
+the command exits. Report the local `127.0.0.1` address. Do not replace the
+foreground service with a detached schedule or a public/LAN binding.
+
+The Dashboard is the human approval surface. The Agent must not click or call the Quick Apply endpoint on the user's behalf.
+A direct Quick Apply requires the user to use the Dashboard confirmation;
+that path uses the JobsDB default CV and no cover letter. It does not tailor
+a CV, generate a cover letter, or create a material task.
+
+An Apply job only opens its JobsDB details page for manual continuation.
+Never send an Apply job to browser automation. Keep the service running while
+the user reviews scoring evidence, changes filters, or selects
+`waiting_for_materials` jobs.

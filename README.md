@@ -1,13 +1,12 @@
 # JobsDB Assistant
 
-当前产品版本：`v0.3.0`。新产品基于上游 JobsDB 自动投递引擎 v2.0
+当前开发版本：`v0.4.0`。新产品基于上游 JobsDB 自动投递引擎 v2.0
 构建；历史 `v2.0-phase*` 标签仅代表上游引擎的重构阶段。
 
-`v0.3.0` 在单关键词 JobsDB 香港职位发现之上，增加确认后版本化的候选人画像，
-并将完整画像确定性映射为 career-ops 原生资料，再执行其 A–F、1.0–5.0
-职位评分。Claude Code/Codex 提供 AI
-推理，Python 与 SQLite 稳定控制校验、缓存和报告。原有 Quick Apply 投递流程
-保持不变。
+`v0.4.0` 在候选人画像和 career-ops 原生 A–F、1.0–5.0 职位评分之上，
+增加仅监听本机的审核 Dashboard。用户可以检查评分过程、勾选后续材料职位，
+或者对单个 Quick Apply 职位使用 JobsDB default CV、no cover letter
+直接投递。Apply 职位只打开详情页，由用户人工继续。
 
 所有候选人资料、JD、定制简历、求职信、cookies、浏览器 profile、SQLite、
 日志和截图只保存在本地忽略目录，CI 不上传任何运行时 artifact。
@@ -17,11 +16,16 @@
 ### 1. 安装
 
 ```bash
-uv venv && uv pip install -e ".[dev]"
+uv venv --python 3.11
+uv sync --extra dev --extra dashboard
 uv run playwright install chromium
+uv pip list
 uv run jobsdb-assistant --version
 uv run jobsdb-assistant doctor
 ```
+
+依赖版本由 `uv.lock` 固定。其他电脑首次使用时，在仓库根目录执行以上相同命令，
+即可创建统一的项目 `.venv`；不要为 Dashboard 单独创建第二套环境。
 
 ### 2. 发现职位（不会投递）
 
@@ -69,7 +73,52 @@ uv run python -m src.main workflow report
 单份简历首次导入不能直接生成画像提案：必须先回答或明确跳过全部必问维度，
 Python 才允许 Agent 提交画像。
 
-### 4. 登录并投递（manual 模式，无需存凭证）
+### 4. 启动本地审核 Dashboard
+
+先检查依赖、SQLite schema、数据数量和默认端口：
+
+```bash
+uv run python -m src.main dashboard doctor
+```
+
+然后启动服务：
+
+```bash
+uv run python -m src.main dashboard start
+```
+
+服务固定监听 `127.0.0.1:8765`，健康检查为
+`http://127.0.0.1:8765/health`，并自动打开本地浏览器。使用 `Ctrl+C`
+停止。若不希望自动打开浏览器：
+
+```bash
+uv run python -m src.main dashboard start --no-browser
+```
+
+若端口被占用，命令会明确失败，不会静默换端口；可显式指定：
+
+```bash
+uv run python -m src.main dashboard doctor --port 8877
+uv run python -m src.main dashboard start --port 8877
+```
+
+Dashboard 默认只显示已评分职位，也可切换到全部职位查看
+`Pending evaluation`。展开职位可检查 Career Ops 原生 A–F findings、
+evidence、Profile/JD/engine 版本溯源；页面不会自行补造逐条 Profile
+判定。
+
+每个职位可立即勾选或取消，状态保存在本地 SQLite：
+
+- **Quick Apply**：可以选择等待后续材料，也可以在明确确认后直接使用
+  **JobsDB default CV**、**no cover letter** 投递当前单个职位。
+- **Apply**：只提供打开 JobsDB 职位详情的入口，由用户找到企业网站并人工投递。
+- “Tailored materials” 在 v0.4 只显示为后续版本能力，不会生成或修改简历。
+
+直接 Quick Apply 复用原有浏览器状态机、登录态、频率限制和申请历史。同一时间
+只允许一个任务；验证码、登录失效或复杂表单会转为人工处理。点击前确认框会明确
+说明使用默认 CV、不附求职信以及提交不可由本系统撤回。
+
+### 5. 登录并投递（manual 模式，无需存凭证）
 
 ```bash
 uv run jobsdb-assistant start --login-mode manual --max-jobs 5
@@ -77,14 +126,14 @@ uv run jobsdb-assistant start --login-mode manual --max-jobs 5
 
 首次运行会打开浏览器等你手动登录 JobsDB（可过验证码）。登录态存入持久化 profile（`data/browser_profile/`），之后长期复用，无需再登录。
 
-### 5. 投递
+### 6. 投递
 
 ```bash
 scripts/run_apply.sh 5     # 一键投递(推荐),先校验登录 cookies 再启动;不传数字默认 5
 python -m src.main stats   # 查看统计
 ```
 
-### 6. Claude Code 投递 Skill：说"帮我投5个"
+### 7. Claude Code 投递 Skill：说"帮我投5个"
 
 仓库附带 skill 文档 [docs/skills/start-apply.md](docs/skills/start-apply.md)，复制到 Claude Code 的项目 skills 目录即可启用：
 
@@ -136,6 +185,16 @@ uv run python scripts/privacy_guard.py
 - 拟人化鼠标（Bezier 曲线）+ 指纹伪装 + 会话持久化降低检测风险，但不保证零风控
 
 ## 📝 更新日志
+
+### v0.4.0 (2026-07-27) — Review Dashboard
+
+- FastAPI + Jinja2 + Vanilla JS 本地审核界面，仅监听 `127.0.0.1`
+- 已评分/全部职位、搜索、分数、Apply 类型和选择状态筛选
+- Career Ops 原生 A–F findings/evidence、Profile/JD/engine 溯源可视化
+- SQLite 即时保存 `waiting_for_materials` 选择状态
+- 单职位 Quick Apply：JobsDB 默认 CV、不附求职信、显式确认、持久任务状态
+- Apply 职位保持人工打开和投递，不进入自动浏览器状态机
+- 统一 `.venv`、可复现 Dashboard extras、doctor/health/start 操作文档
 
 ### v0.3.0 (2026-07-24) — Candidate & Evaluation
 
