@@ -14,6 +14,8 @@
   - `*.log` / 日志 - 可能包含账号信息
   - `auto_apply.log` - 投递日志
 - [ ] `workspace/` 下的候选人资料、定制简历、求职信和审批记录
+  - `workspace/ai-tasks/` - Agent 任务、结果和临时材料
+  - `workspace/materials/` - 每个职位的 PDF、求职信、检查和版本清单
 - [ ] `.claude/`、`.codex/`、`.agents/` 中的本地设置（共享 skill 除外）
 - [ ] 任何位置的 `*.pdf`、`*.docx`、`*.db`、截图或真实职位报告
 - [ ] 源码和配置中形似 GitHub、OpenAI、AWS 凭证的字符串
@@ -57,8 +59,9 @@
 
 3. 安装依赖：
    ```bash
-   pip install -e ".[dev]"
-   playwright install chromium
+   uv sync --extra dev --extra dashboard
+   uv run playwright install chromium
+   uv pip list
    ```
 
 4. 每次提交前运行自动隐私检查：
@@ -68,3 +71,5 @@
 
 守卫只扫描 Git 已跟踪文件，因此它是 `.gitignore` 之外的第二道防线。
 发现私有路径或疑似密钥时会返回非零退出码，适合在本地和 CI 中执行。
+CI 不得使用 artifact upload 上传 `data/`、`workspace/`、PDF、求职信、
+SQLite、截图或 Agent 检查点。

@@ -67,7 +67,7 @@ def test_health_is_ready(
     assert client.get("/health").json() == {
         "status": "ok",
         "database": "ready",
-        "dashboard_version": "0.4.0",
+        "dashboard_version": "0.5.0",
     }
 
 

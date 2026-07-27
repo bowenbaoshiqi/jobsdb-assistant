@@ -31,7 +31,7 @@ def create_dashboard_app(
 ) -> FastAPI:
     app = FastAPI(
         title="JobsDB Assistant",
-        version="0.4.0",
+        version="0.5.0",
         docs_url=None,
         redoc_url=None,
     )

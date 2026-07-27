@@ -13,9 +13,11 @@ import uvicorn
 
 from config.settings import get_config
 from src.accounts.registry import AccountRegistry
+from src.application.runtime import build_material_generation_service
 from src.dashboard.app import DashboardDependencies, create_dashboard_app
 from src.dashboard.application_service import DashboardApplicationService
 from src.dashboard.evaluation_progress import EvaluationProgressStore
+from src.dashboard.material_service import DashboardMaterialService
 from src.dashboard.query_service import DashboardQueryService
 from src.orchestrator import Orchestrator
 from src.storage.database import Database
@@ -77,6 +79,9 @@ def run_dashboard_doctor(
                 "candidate_profiles",
                 "job_selections",
                 "dashboard_application_tasks",
+                "material_tasks",
+                "material_packages",
+                "material_review_events",
             }
             missing = sorted(required - tables)
             if missing:
@@ -158,6 +163,7 @@ def build_production_app():
         database,
         runner=run_one,
     )
+    material_generation = build_material_generation_service()
     return create_dashboard_app(
         DashboardDependencies(
             database=database,
@@ -166,6 +172,12 @@ def build_production_app():
             application_service=application_service,
             evaluation_progress=EvaluationProgressStore(
                 Path("workspace/dashboard/evaluation-progress.json")
+            ),
+            material_service=DashboardMaterialService(
+                database=database,
+                repository=material_generation.repository,
+                generation=material_generation,
+                materials_root=Path("workspace/materials"),
             ),
         )
     )
