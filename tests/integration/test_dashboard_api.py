@@ -198,11 +198,31 @@ def test_page_contains_review_and_safe_action_controls(
     assert 'id="show-filter"' in html
     assert "使用默认简历直接投递" in html
     assert "打开职位并人工投递" in html
-    assert "定制申请材料（后续版本）" in html
+    assert 'id="generate-materials"' in html
+    assert "为已选职位生成定制材料" in html
     assert 'id="apply-confirmation"' in html
     assert 'id="evaluation-progress"' in html
     assert 'id="refresh-results"' in html
     assert "刷新评分结果" in html
+
+
+def test_material_preview_page_is_simplified_chinese(
+    dashboard_api: tuple[TestClient, AsyncMock],
+) -> None:
+    client, _runner = dashboard_api
+
+    response = client.get("/materials/package-1")
+
+    assert response.status_code == 200
+    assert '<html lang="zh-CN">' in response.text
+    assert 'id="resume-preview"' in response.text
+    assert 'id="cover-letter-preview"' in response.text
+    assert "Reviewer 建议" in response.text
+    assert "ATS 建议" in response.text
+    assert "事实一致性检查" in response.text
+    assert "批准材料" in response.text
+    assert "标记不通过" in response.text
+    assert "重新生成" in response.text
 
 
 def test_dashboard_javascript_does_not_schedule_automatic_refresh(
