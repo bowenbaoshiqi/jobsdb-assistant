@@ -17,7 +17,7 @@ NOW = datetime(2026, 7, 27, tzinfo=UTC)
 def test_material_state_survives_repository_restart(tmp_path: Path) -> None:
     path = tmp_path / "jobs.db"
     database = Database(str(path))
-    saved = database.save_discovered_job(
+    database.save_discovered_job(
         JobDetailCapture(
             jobsdb_job_id="job-1",
             canonical_url="https://hk.jobsdb.com/job/job-1",
@@ -29,12 +29,14 @@ def test_material_state_survives_repository_restart(tmp_path: Path) -> None:
         ),
         captured_at=NOW,
     )
+    snapshot = database.get_current_job_snapshot_record("job-1")
+    assert snapshot is not None
     repository = MaterialRepository(database)
     repository.create_task(
         task_id="task-1",
         batch_id="batch-1",
         job_id="job-1",
-        snapshot_id=int(saved.snapshot_id),
+        snapshot_id=int(snapshot.snapshot_id),
         profile_version=1,
         evaluation_id="evaluation-1",
         target_version=1,

@@ -21,7 +21,7 @@ HASH_B = "b" * 64
 
 def _repository() -> tuple[MaterialRepository, int]:
     database = Database(":memory:")
-    saved = database.save_discovered_job(
+    database.save_discovered_job(
         JobDetailCapture(
             jobsdb_job_id="job-1",
             canonical_url="https://hk.jobsdb.com/job/job-1",
@@ -33,7 +33,9 @@ def _repository() -> tuple[MaterialRepository, int]:
         ),
         captured_at=NOW,
     )
-    return MaterialRepository(database), int(saved.snapshot_id)
+    snapshot = database.get_current_job_snapshot_record("job-1")
+    assert snapshot is not None
+    return MaterialRepository(database), int(snapshot.snapshot_id)
 
 
 def _package(version: int, *, facts_passed: bool = True) -> ApplicationPackage:
@@ -211,10 +213,13 @@ def test_reject_and_regenerate_preserve_old_package() -> None:
     assert repository.get_package("package-1").review_status is (
         MaterialReviewStatus.REJECTED
     )
-    with pytest.raises(ValueError, match="regeneration"):
-        repository.record_review(
-            "package-1",
-            MaterialReviewAction.REGENERATE,
-            reviewed_at=NOW,
-        )
-
+    event = repository.record_review(
+        "package-1",
+        MaterialReviewAction.REGENERATE,
+        feedback="Emphasise platform leadership",
+        reviewed_at=NOW,
+    )
+    assert event.resulting_status is MaterialReviewStatus.SUPERSEDED
+    assert repository.get_package("package-1").review_status is (
+        MaterialReviewStatus.SUPERSEDED
+    )
