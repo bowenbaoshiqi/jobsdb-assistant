@@ -22,6 +22,7 @@ from src.storage.models import (
     SessionStatus,
 )
 from src.storage.v03_migration import add_v03_schema
+from src.storage.v04_migration import add_v04_schema
 
 
 def _mark_legacy_schema(_conn: sqlite3.Connection) -> None:
@@ -101,6 +102,11 @@ class Database:
                     3,
                     "v0.3 candidate and evaluation schema",
                     add_v03_schema,
+                ),
+                Migration(
+                    4,
+                    "v0.4 dashboard schema",
+                    add_v04_schema,
                 ),
             ]
         )
