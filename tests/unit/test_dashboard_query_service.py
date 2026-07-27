@@ -152,8 +152,11 @@ def test_defaults_to_evaluated_jobs_and_preserves_native_trace() -> None:
 
     assert [job.job_id for job in page.jobs] == ["high-score"]
     assert [item.code for item in page.jobs[0].dimensions] == list("ABCDEF")
-    assert page.jobs[0].dimensions[0].findings == ["native finding"]
-    assert page.jobs[0].dimensions[0].evidence == ["JD: direct evidence"]
+    assert page.jobs[0].dimensions[0].title == "职位与求职目标匹配度"
+    assert page.jobs[0].dimensions[0].findings == ["原文：native finding"]
+    assert page.jobs[0].dimensions[0].evidence == ["原文：JD: direct evidence"]
+    assert page.jobs[0].recommendation == "强烈建议申请"
+    assert page.jobs[0].strengths == ["原文：Enterprise AI leadership"]
     assert page.jobs[0].profile_summary.target_roles == ["Head of AI"]
     assert page.jobs[0].provenance.engine_commit == "b" * 40
 
