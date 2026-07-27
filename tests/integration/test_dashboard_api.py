@@ -200,3 +200,15 @@ def test_page_contains_review_and_safe_action_controls(
     assert "定制申请材料（后续版本）" in html
     assert 'id="apply-confirmation"' in html
     assert 'id="evaluation-progress"' in html
+    assert 'id="refresh-results"' in html
+    assert "刷新评分结果" in html
+
+
+def test_dashboard_javascript_does_not_schedule_automatic_refresh(
+    dashboard_api: tuple[TestClient, AsyncMock],
+) -> None:
+    client, _runner = dashboard_api
+
+    javascript = client.get("/static/dashboard.js").text
+
+    assert "setInterval" not in javascript

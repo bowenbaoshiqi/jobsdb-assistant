@@ -103,3 +103,24 @@ async def test_apply_controls_are_type_specific(
     assert await mock_page.locator("#job-list").get_by_text(
         "待评分"
     ).is_visible()
+
+
+@pytest.mark.asyncio
+async def test_jobs_refresh_only_after_explicit_user_action(
+    live_dashboard: str,
+    mock_page,
+) -> None:
+    await mock_page.goto(f"{live_dashboard}/?show=all")
+    card = mock_page.locator(".job-card").first
+    await card.evaluate("(node) => { window.__initialJobCard = node; }")
+
+    await mock_page.wait_for_timeout(3_500)
+
+    assert await card.evaluate("(node) => node === window.__initialJobCard")
+
+    await mock_page.get_by_role("button", name="刷新评分结果").click()
+
+    await mock_page.wait_for_function(
+        "() => document.querySelector('.job-card') !== window.__initialJobCard"
+    )
+    assert await mock_page.get_by_text("评分结果已刷新。").is_visible()
