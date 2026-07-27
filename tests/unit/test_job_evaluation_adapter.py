@@ -106,6 +106,7 @@ def test_evaluation_task_uses_only_native_career_ops_scoring() -> None:
         "modes/oferta.md",
     ]
     assert task.mode == "evaluation_only"
+    assert task.output_language == "zh-CN"
     assert task.profile_context_paths == [
         str(bundle().profile_yml_path),
         str(bundle().profile_md_path),

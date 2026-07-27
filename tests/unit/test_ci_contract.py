@@ -11,3 +11,5 @@ def test_ci_enforces_privacy_branch_coverage_and_lint() -> None:
     assert "ruff check src/ tests/ scripts/privacy_guard.py" in workflow
     assert "upload-artifact" not in workflow
     assert '"pytest-cov' in project
+    assert workflow.count('uv pip install -e ".[dev,dashboard]"') == 3
+    assert 'uv pip install -e ".[dev]"' not in workflow

@@ -23,6 +23,7 @@ class JobEvaluationTask(BaseModel):
     contract_version: str
     capability_paths: list[str]
     mode: Literal["evaluation_only"] = "evaluation_only"
+    output_language: Literal["zh-CN"] = "zh-CN"
     profile_id: str
     profile_version: int = Field(gt=0)
     profile_hash: str = Field(pattern=r"^[a-f0-9]{64}$")

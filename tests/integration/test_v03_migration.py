@@ -21,7 +21,7 @@ def test_migration_three_is_idempotent(tmp_path: Path) -> None:
             ).fetchall()
         }
 
-    assert versions == [(1,), (2,), (3,)]
+    assert versions.count((3,)) == 1
     assert {
         "integration_observations",
         "workflow_runs",

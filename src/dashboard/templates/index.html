@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>JobsDB 求职助手</title>
+    <link rel="stylesheet" href="/static/dashboard.css">
+    <script src="/static/dashboard.js" defer></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">本地职位审核</p>
+          <h1>JobsDB 求职助手</h1>
+        </div>
+        <div class="selected-summary">
+          <strong id="selected-count">0</strong>
+          <span>个职位已选择</span>
+        </div>
+      </header>
+
+      <section class="summary-grid" aria-label="职位汇总">
+        <div><strong id="total-count">0</strong><span>职位总数</span></div>
+        <div><strong id="evaluated-count">0</strong><span>已评分</span></div>
+        <div><strong id="pending-count">0</strong><span>待评分</span></div>
+      </section>
+
+      <section id="evaluation-progress" class="progress-panel" aria-label="评分进度">
+        <div>
+          <p class="eyebrow">当前评分批次</p>
+          <h2 id="progress-status">尚未启动</h2>
+          <p id="progress-note" class="muted">Dashboard 只展示结果，需要当前 Agent 会话执行评分。</p>
+        </div>
+        <div class="progress-counts">
+          <span>本批 <strong id="progress-total">0</strong></span>
+          <span>等待 <strong id="progress-queued">0</strong></span>
+          <span>处理中 <strong id="progress-running">0</strong></span>
+          <span>完成 <strong id="progress-completed">0</strong></span>
+          <span>失败 <strong id="progress-failed">0</strong></span>
+          <button id="refresh-results" type="button">刷新评分结果</button>
+        </div>
+      </section>
+
+      <section class="filters" aria-label="职位筛选">
+        <label class="toggle">
+          <input id="show-filter" type="checkbox">
+          <span>显示全部职位</span>
+        </label>
+        <label>
+          最低评分
+          <select id="score-filter">
+            <option value="">全部评分</option>
+            <option value="4.5">4.5+</option>
+            <option value="4">4.0+</option>
+            <option value="3">3.0+</option>
+          </select>
+        </label>
+        <label>
+          投递类型
+          <select id="type-filter">
+            <option value="">全部类型</option>
+            <option value="quick_apply">快捷投递</option>
+            <option value="apply">外部投递</option>
+          </select>
+        </label>
+        <label>
+          选择状态
+          <select id="selection-filter">
+            <option value="">全部职位</option>
+            <option value="true">已选择</option>
+            <option value="false">未选择</option>
+          </select>
+        </label>
+        <label class="search-filter">
+          职位或公司
+          <input id="query-filter" type="search" autocomplete="off">
+        </label>
+      </section>
+
+      <p id="dashboard-error" class="error" role="alert" hidden></p>
+      <p id="dashboard-status" class="sr-only" aria-live="polite"></p>
+      <section id="job-list" class="job-list" aria-label="职位列表"></section>
+
+      <dialog id="apply-confirmation">
+        <form method="dialog">
+          <h2>快捷投递确认</h2>
+          <p id="confirmation-job"></p>
+          <ul>
+            <li>使用 JobsDB 当前设置的默认简历。</li>
+            <li>不修改或上传新简历。</li>
+            <li>不附求职信。</li>
+            <li>提交后无法通过本系统撤回。</li>
+          </ul>
+          <div class="dialog-actions">
+            <button value="cancel">取消</button>
+            <button id="confirm-apply" value="confirm" class="primary">
+              确认投递
+            </button>
+          </div>
+        </form>
+      </dialog>
+
+      <template id="future-actions">
+        <button>使用默认简历直接投递</button>
+        <a>打开职位并人工投递</a>
+        <button disabled>定制申请材料（后续版本）</button>
+      </template>
+    </main>
+  </body>
+</html>

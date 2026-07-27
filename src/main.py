@@ -36,6 +36,8 @@ account_app = typer.Typer(help="多账户管理器")
 app.add_typer(account_app, name="account")
 workflow_app = typer.Typer(help="候选人画像与职位评分工作流")
 app.add_typer(workflow_app, name="workflow")
+dashboard_app = typer.Typer(help="本地职位审核 Dashboard")
+app.add_typer(dashboard_app, name="dashboard")
 
 console = Console()
 
@@ -174,6 +176,43 @@ def workflow_evaluation_submit(
 def workflow_report() -> None:
     """输出当前画像版本对应的完整评分报告。"""
     typer.echo(_build_candidate_evaluation_workflow().report())
+
+
+@dashboard_app.command("doctor")
+def dashboard_doctor(
+    port: int = typer.Option(8765, "--port", min=1, max=65535),
+) -> None:
+    """检查 Dashboard 依赖、数据库和本地端口。"""
+    from src.dashboard.cli import CheckState, run_dashboard_doctor
+
+    results = run_dashboard_doctor(
+        database_path=get_config().storage.database_path,
+        port=port,
+    )
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("Check")
+    table.add_column("Status")
+    table.add_column("Detail")
+    for item in results:
+        table.add_row(item.name, item.state.value, item.detail)
+    console.print(table)
+    if any(item.state is CheckState.FAIL for item in results):
+        raise typer.Exit(code=1)
+
+
+@dashboard_app.command("start")
+def dashboard_start(
+    port: int = typer.Option(8765, "--port", min=1, max=65535),
+    no_browser: bool = typer.Option(False, "--no-browser"),
+) -> None:
+    """启动仅监听 127.0.0.1 的本地审核 Dashboard。"""
+    from src.dashboard.cli import start_dashboard
+
+    try:
+        start_dashboard(port=port, open_browser=not no_browser)
+    except RuntimeError as exc:
+        console.print(f"[bold red]{exc}[/bold red]")
+        raise typer.Exit(code=1) from exc
 
 
 @app.callback()
