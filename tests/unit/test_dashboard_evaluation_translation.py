@@ -79,3 +79,32 @@ def test_existing_chinese_text_is_not_prefixed() -> None:
     )
 
     assert translated.strengths == ["具备企业级 AI 领导经验"]
+
+
+def test_complete_evaluation_override_translates_historical_result() -> None:
+    catalog = EvaluationTranslationCatalog(
+        {},
+        evaluation_overrides={
+            "evaluation-1": {
+                "recommendation": "建议申请",
+                "strengths": ["架构经验匹配"],
+                "gaps": ["团队规模未知"],
+                "risks": ["薪酬未知"],
+                "dimensions": {
+                    "A": {
+                        "findings": ["职位方向基本匹配"],
+                        "evidence": ["职位描述包含企业级 AI 平台"],
+                    }
+                },
+            }
+        },
+    )
+
+    translated = translate_evaluation(_evaluation(), catalog)
+
+    assert translated.recommendation == "建议申请"
+    assert translated.strengths == ["架构经验匹配"]
+    assert translated.dimensions[0].findings == ["职位方向基本匹配"]
+    assert translated.dimensions[0].evidence == [
+        "职位描述包含企业级 AI 平台"
+    ]
