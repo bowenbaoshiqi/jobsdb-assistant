@@ -212,3 +212,70 @@ def test_explicit_skips_are_recorded_but_not_invented(
     }
     assert omitted["compensation"] == "not_provided"
     assert omitted["references"] == "no_preference"
+
+
+def test_answered_compensation_is_projected_to_native_context(
+    tmp_path: Path,
+) -> None:
+    profile = complete_profile()
+    answer = InterviewAnswer(
+        status=InterviewAnswerStatus.ANSWERED,
+        value="HKD 1.2M target and HKD 1M minimum.",
+    )
+    syntheses = tuple(
+        item.model_copy(
+            update={
+                "answer_hash": interview_answer_hash(answer),
+                "summary": "Target HKD 1.2M; minimum HKD 1M.",
+                "compensation_target": "HKD 1.2M",
+                "compensation_minimum": "HKD 1M",
+                "compensation_currency": "HKD",
+            }
+        )
+        if item.dimension is InterviewDimension.SALARY_EXPECTATIONS
+        else item
+        for item in profile.intent_syntheses
+    )
+    answers = {
+        **profile.interview_answers,
+        InterviewDimension.SALARY_EXPECTATIONS: answer,
+    }
+
+    bundle = projector(tmp_path).project(
+        profile.model_copy(
+            update={
+                "interview_answers": answers,
+                "intent_syntheses": syntheses,
+            }
+        )
+    )
+    profile_yml = yaml.safe_load(bundle.profile_yml_path.read_text())
+
+    assert profile_yml["compensation"] == {
+        "target_range": "HKD 1.2M",
+        "minimum": "HKD 1M",
+        "currency": "HKD",
+    }
+    assert "## Compensation Expectations" in (
+        bundle.profile_md_path.read_text()
+    )
+    assert "Target HKD 1.2M; minimum HKD 1M." in (
+        bundle.profile_md_path.read_text()
+    )
+
+
+def test_projector_revalidates_persisted_answer_hashes(
+    tmp_path: Path,
+) -> None:
+    profile = complete_profile()
+    corrupted = (
+        profile.intent_syntheses[0].model_copy(
+            update={"answer_hash": "0" * 64}
+        ),
+        *profile.intent_syntheses[1:],
+    )
+
+    with pytest.raises(ValueError, match="answer hash mismatch"):
+        projector(tmp_path).project(
+            profile.model_copy(update={"intent_syntheses": corrupted})
+        )

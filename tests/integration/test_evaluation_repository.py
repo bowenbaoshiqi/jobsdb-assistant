@@ -19,6 +19,8 @@ def cache_key(snapshot_hash: str) -> EvaluationCacheKey:
     return EvaluationCacheKey(
         snapshot_hash=snapshot_hash,
         profile_hash="a" * 64,
+        profile_bundle_hash="d" * 64,
+        profile_projection_version="career-ops-profile-bundle.v1",
         engine_commit="b" * 40,
         contract_version="career-ops-native-af.v1",
     )
