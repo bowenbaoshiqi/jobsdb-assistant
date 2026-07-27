@@ -28,6 +28,7 @@ Both pinned public forks remained unchanged:
 | Bundle-backed evaluation | `52e089b` | `b76d214` |
 | Workflow protocol | `b390e0d` | `eb96def` |
 | Intent completeness regression | `158844d` | `3fc43f9` |
+| Runtime projector wiring | `bd1c335` | `777b911` |
 
 Each RED checkpoint was run before its implementation and failed for the
 missing behavior. Focused GREEN suites passed after implementation.
@@ -35,17 +36,18 @@ missing behavior. Focused GREEN suites passed after implementation.
 ## Verification
 
 - `uv run ruff check src tests`: passed.
-- `uv run pytest -m "not e2e" -q`: 523 passed, 1 skipped,
-  20 deselected before the final intent-completeness regression.
+- `uv run pytest -m "not e2e" -q`: passed before the final release gate.
 - `uv run pytest -m "not e2e" --cov=src --cov-branch
-  --cov-report=term -q`: 523 passed, total coverage 84.64%.
+  --cov-report=term -q`: 526 passed, 1 skipped, 20 deselected; total
+  coverage 85.24%.
 - Native profile focused suite after the final regression:
   9 passed.
-- Final full non-E2E regression after all changes:
-  525 passed, 1 skipped, 20 deselected.
+- Runtime construction and workflow focused suite:
+  5 passed after reproducing the real CLI wiring failure.
 - Both repository skill directories passed `quick_validate.py`.
 - `uv run python scripts/privacy_guard.py`: passed.
 - `git diff --check`: passed.
+- Both pinned integrations passed local commit and required-path checks.
 
 Known warnings are pre-existing Pydantic v1-validator deprecations and test
 resource warnings from legacy browser/application coverage tests. They do not
@@ -60,5 +62,5 @@ change the result of this feature verification.
 - Candidate content is never written below `integrations/`.
 - The projection manifest hashes each native input and records canonical
   field and answer-hash provenance.
-- Existing profile v1 remains historical. A complete v2 profile requires an
-  explicit update interview and user confirmation.
+- Legacy profile JSON remains readable for compatibility. Local profile
+  retention or deletion is a user-controlled runtime-data decision.
