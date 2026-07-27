@@ -1,5 +1,11 @@
 """Compose current jobs and immutable evaluation data for the Dashboard."""
 
+from pathlib import Path
+
+from src.dashboard.evaluation_translation import (
+    EvaluationTranslationCatalog,
+    translate_evaluation,
+)
 from src.dashboard.schemas import (
     CandidateProfileSummary,
     DashboardDimension,
@@ -23,12 +29,24 @@ from src.storage.selection_repository import SelectionRepository
 class DashboardQueryService:
     """Build a truthful read model without performing new AI analysis."""
 
-    def __init__(self, database: Database) -> None:
+    def __init__(
+        self,
+        database: Database,
+        *,
+        translation_catalog: EvaluationTranslationCatalog | None = None,
+    ) -> None:
         self.database = database
         self.profiles = CandidateRepository(database)
         self.evaluations = EvaluationRepository(database)
         self.selections = SelectionRepository(database)
         self.application_tasks = DashboardApplicationRepository(database)
+        self.translation_catalog = (
+            translation_catalog
+            if translation_catalog is not None
+            else EvaluationTranslationCatalog.from_path(
+                Path("workspace/dashboard/evaluation-translations.json")
+            )
+        )
 
     def list_jobs(self, filters: DashboardFilters) -> DashboardPage:
         snapshots = self.database.list_current_snapshot_records()
@@ -106,6 +124,10 @@ class DashboardQueryService:
                 ),
                 application_task=application_task,
             )
+        evaluation = translate_evaluation(
+            evaluation,
+            self.translation_catalog,
+        )
         return DashboardJob(
             job_id=snapshot.job_id,
             snapshot_id=snapshot.snapshot_id,
