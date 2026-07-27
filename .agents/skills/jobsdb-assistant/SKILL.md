@@ -3,7 +3,7 @@ name: jobsdb-assistant
 description: Run the local JobsDB Hong Kong candidate-profile, job-evaluation, and review Dashboard workflow. Use when the user asks to initialize or update their candidate profile, discover JobsDB roles for one keyword, score current roles with native career-ops A-F evaluation, generate the local evaluation report, or open the local review Dashboard. Keep the current Codex or compatible agent session active until Python reports completion.
 ---
 
-# JobsDB Candidate and Evaluation Workflow
+# JobsDB Candidate, Evaluation, and Material Workflow
 
 Python and SQLite are the state authority. Do not choose or skip workflow
 stages. Do not modify either integration checkout.
@@ -182,3 +182,52 @@ An Apply job only opens its JobsDB details page for manual continuation.
 Never send an Apply job to browser automation. Keep the service running while
 the user reviews scoring evidence, changes filters, or selects
 `waiting_for_materials` jobs.
+
+## 6. Service tailored-material tasks
+
+When the user creates a material batch in the Dashboard, remain in the
+current Agent session until every task reaches `generated` or `failed`.
+v0.5 never applies to a job and never calls the Quick Apply endpoint.
+
+List work owned by Python:
+
+```bash
+uv run python -m src.main workflow material-pending
+```
+
+For every `waiting_for_agent` task:
+
+1. Read `workspace/ai-tasks/<task_id>/task.json`.
+2. Read only its `capability_paths` below
+   `integrations/candidate-profile/`. These are pinned files; never edit them.
+3. Read the task's three `profile_context_paths`, single JD, and native A-F
+   evaluation. Treat the confirmed profile and source CV as the only factual
+   sources.
+4. Create an English tailored CV PDF and an English 100–300-word cover
+   letter under `workspace/ai-tasks/<task_id>/staging/`.
+5. Run Reviewer, ATS, and factual checks in that exact order. Reviewer and
+   ATS are advisory. Report check and change summaries in Simplified Chinese.
+6. Write a schema-valid result matching the task identity to
+   `workspace/ai-tasks/<task_id>/agent-result.json`.
+7. Submit only through Python:
+
+```bash
+uv run python -m src.main workflow material-submit \
+  --task-id TASK_ID \
+  --result workspace/ai-tasks/TASK_ID/agent-result.json
+```
+
+If one result fails validation, report its task ID and error, then continue other material tasks.
+Never invent experience, dates, titles, employers,
+skills, metrics, team sizes, education, or outcomes. Do not approve, reject,
+regenerate, or submit materials on the user's behalf.
+
+After each task, and once at the end, report durable progress:
+
+```bash
+uv run python -m src.main workflow material-progress --batch-id BATCH_ID
+```
+
+The first profile workflow installs missing pinned integrations only on a
+genuine first run. On later runs, reuse the existing locked checkouts and
+immutable confirmed profile unless the user explicitly requests an update.

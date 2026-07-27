@@ -286,6 +286,17 @@ class MaterialRepository:
             ).fetchall()
         return [self._task_from_row(row) for row in rows]
 
+    def list_pending(self) -> list[MaterialTaskRecord]:
+        with self.database._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM material_tasks
+                WHERE status IN ('waiting_for_agent', 'generating')
+                ORDER BY created_at, id
+                """
+            ).fetchall()
+        return [self._task_from_row(row) for row in rows]
+
     def record_review(
         self,
         package_id: str,
