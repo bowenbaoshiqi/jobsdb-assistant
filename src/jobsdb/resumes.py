@@ -12,6 +12,7 @@ from pathlib import Path
 from src.browser.ports.page_controller import PageController
 from src.jobsdb.selectors import (
     PROFILE_ADD_RESUME,
+    PROFILE_FIRST_RESUME_OPTIONS,
     PROFILE_RESUME_DELETE,
     PROFILE_RESUME_DELETE_CONFIRM,
     PROFILE_RESUME_DONE,
@@ -32,17 +33,6 @@ _LIST_RESUMES_JS = r"""() => {
   )).map(button => button.getAttribute('aria-label')
     .replace(/^Options for /, '').trim()).filter(Boolean);
 }"""
-
-_OPEN_FIRST_RESUME_OPTIONS_JS = r"""() => {
-  /* JBA_OPEN_FIRST_RESUME_OPTIONS */
-  const button = document.querySelector(
-    'button[aria-label^="Options for "]'
-  );
-  if (!button) return false;
-  button.click();
-  return true;
-}"""
-
 
 class ResumeListNotEmptyError(RuntimeError):
     """Remote resumes could not be cleared safely."""
@@ -119,14 +109,12 @@ class RemoteResumeManager:
             names = await self._list_names()
             if not names:
                 return
-            clicked = await self.page.evaluate(
-                _OPEN_FIRST_RESUME_OPTIONS_JS
-            )
-            if not clicked:
+            try:
+                await self.page.click(PROFILE_FIRST_RESUME_OPTIONS)
+            except Exception as exc:
                 raise ResumeListNotEmptyError(
                     f"could not delete remote resume {names[0]!r}"
-                )
-            await self.page.wait_for_timeout(100)
+                ) from exc
             await self.page.click(PROFILE_RESUME_DELETE)
             await self.page.wait_for_timeout(200)
             if await self.page.is_visible(PROFILE_RESUME_DELETE_CONFIRM):

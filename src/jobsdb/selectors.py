@@ -47,6 +47,11 @@ PROFILE_ADD_RESUME = (
 )
 PROFILE_RESUME_FILE_INPUT = 'input[data-automation="resume-upload"]'
 PROFILE_RESUME_DONE = 'button[data-automation="manage-resume-done"]'
+PROFILE_FIRST_RESUME_OPTIONS = (
+    '[data-automation^="resume-item-"]'
+    ':not([data-automation="resume-item-list"]) '
+    'button[aria-label^="Options for "]'
+)
 PROFILE_RESUME_DELETE = (
     'button[data-automation^="delete-resume-button-"]'
 )
