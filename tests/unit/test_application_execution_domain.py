@@ -57,6 +57,15 @@ def test_submitted_cannot_transition_back_to_queued() -> None:
         )
 
 
+def test_failed_execution_can_be_explicitly_requeued() -> None:
+    changed = _execution(ApplicationExecutionStatus.FAILED).transition(
+        ApplicationExecutionStatus.QUEUED,
+        at=NOW,
+    )
+
+    assert changed.status is ApplicationExecutionStatus.QUEUED
+
+
 def test_queued_can_transition_to_resume_preparation() -> None:
     changed = _execution().transition(
         ApplicationExecutionStatus.PREPARING_RESUME,

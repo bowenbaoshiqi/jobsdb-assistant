@@ -195,6 +195,23 @@ async def test_queue_is_idempotent_and_refuses_submitted_duplicate(
         raise AssertionError("duplicate submitted job must be rejected")
 
 
+def test_queue_retries_same_failed_execution(tmp_path: Path) -> None:
+    service, executions, _resumes, _wizard = _service(tmp_path)
+    first = service.queue("job-1", account_alias="personal")
+    executions.transition(
+        first.id,
+        ApplicationExecutionStatus.FAILED,
+        at=NOW,
+        error_code="login_failed",
+    )
+
+    retried = service.queue("job-1", account_alias="personal")
+
+    assert retried.id == first.id
+    assert retried.status is ApplicationExecutionStatus.QUEUED
+    assert retried.error_code is None
+
+
 def test_manual_apply_handoff_uses_approved_material(tmp_path: Path) -> None:
     service, executions, _resumes, _wizard = _service(
         tmp_path,
