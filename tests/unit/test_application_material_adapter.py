@@ -9,6 +9,7 @@ from src.adapters.career_ops_profile import CareerOpsProfileBundle
 from src.domain.candidate import CandidateProfile
 from src.domain.evaluation import JobEvaluation, NativeDimension
 from src.domain.job import ApplyType, CurrentSnapshotRecord
+from src.domain.material import MaterialMode
 
 NOW = datetime(2026, 7, 27, tzinfo=UTC)
 PROFILE_HASH = "a" * 64
@@ -88,6 +89,7 @@ def _result(task) -> dict:
         "profile_hash": task.profile_hash,
         "evaluation_id": task.evaluation_id,
         "material_version": task.material_version,
+        "material_mode": task.material_mode,
         "source_cv_hash": task.source_cv_hash,
         "tailored_sections": {
             "professional_summary": "Enterprise AI leader",
@@ -133,6 +135,48 @@ def test_task_binds_all_immutable_inputs_and_language_contract(
     assert task.cover_letter_word_range == (100, 300)
     assert task.feedback == "Emphasise leadership"
     assert len(task.source_cv_hash) == 64
+    assert task.material_mode is (
+        MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+    )
+
+
+def test_cover_letter_only_mode_round_trips_through_result(
+    tmp_path: Path,
+) -> None:
+    profile, bundle, snapshot, evaluation = _inputs(tmp_path)
+    adapter = ApplicationMaterialAdapter(COMMIT, "application-material.v1")
+    task = adapter.build_task(
+        task_id="task-cover",
+        material_version=1,
+        material_mode=MaterialMode.COVER_LETTER_ONLY,
+        profile=profile,
+        bundle=bundle,
+        snapshot=snapshot,
+        evaluation=evaluation,
+    )
+
+    result = adapter.validate_result(task, _result(task))
+
+    assert result.material_mode is MaterialMode.COVER_LETTER_ONLY
+
+
+def test_result_rejects_material_mode_mismatch(tmp_path: Path) -> None:
+    profile, bundle, snapshot, evaluation = _inputs(tmp_path)
+    adapter = ApplicationMaterialAdapter(COMMIT, "application-material.v1")
+    task = adapter.build_task(
+        task_id="task-cover",
+        material_version=1,
+        material_mode=MaterialMode.COVER_LETTER_ONLY,
+        profile=profile,
+        bundle=bundle,
+        snapshot=snapshot,
+        evaluation=evaluation,
+    )
+    payload = _result(task)
+    payload["material_mode"] = "tailored_resume_and_cover_letter"
+
+    with pytest.raises(ValueError, match="material mode"):
+        adapter.validate_result(task, payload)
 
 
 def test_task_uses_configured_pdf_template_not_career_ops_markdown(

@@ -8,6 +8,7 @@ from src.domain.application_execution import (
     ApplicationIdentity,
 )
 from src.domain.job import ApplyType
+from src.domain.material import MaterialMode
 
 NOW = datetime(2026, 7, 28, tzinfo=UTC)
 
@@ -47,6 +48,17 @@ def test_application_identity_changes_with_material_version() -> None:
 
 def test_application_identity_is_stable() -> None:
     assert _identity().idempotency_key() == _identity().idempotency_key()
+
+
+def test_cover_letter_only_identity_accepts_no_resume() -> None:
+    identity = _identity().model_copy(
+        update={
+            "material_mode": MaterialMode.COVER_LETTER_ONLY,
+            "resume_sha256": None,
+        }
+    )
+
+    assert identity.resume_sha256 is None
 
 
 def test_submitted_cannot_transition_back_to_queued() -> None:
