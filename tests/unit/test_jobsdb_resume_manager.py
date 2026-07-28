@@ -7,6 +7,7 @@ from src.jobsdb.resumes import (
     ResumeListNotEmptyError,
     ResumeUploadMismatchError,
 )
+from src.jobsdb.selectors import PROFILE_ADD_RESUME
 
 
 class ResumePage:
@@ -15,6 +16,7 @@ class ResumePage:
         self.url = ""
         self.uploaded_path: Path | None = None
         self.refuse_delete = False
+        self.management_open = False
 
     async def goto(self, url: str, wait_until: str = "domcontentloaded") -> None:
         self.url = url
@@ -27,6 +29,8 @@ class ResumePage:
         return None
 
     async def evaluate(self, expression: str):
+        if not self.management_open:
+            raise AssertionError("resume management must be opened first")
         if "JBA_LIST_RESUMES" in expression:
             return list(self.names)
         if "JBA_DELETE_FIRST_RESUME" in expression:
@@ -40,7 +44,8 @@ class ResumePage:
         return False
 
     async def click(self, selector: str, timeout: float = 30.0) -> None:
-        return None
+        if selector == PROFILE_ADD_RESUME:
+            self.management_open = True
 
     async def set_input_files(self, selector: str, path: str) -> None:
         self.uploaded_path = Path(path)
@@ -69,6 +74,7 @@ async def test_replace_deletes_every_resume_then_uploads_exact_file(
 
     assert page.names == ["JBA_42_v1_abcd1234.pdf"]
     assert receipt.filename == "JBA_42_v1_abcd1234.pdf"
+    assert page.management_open is True
     assert page.uploaded_path is not None
     assert not page.uploaded_path.exists()
 
