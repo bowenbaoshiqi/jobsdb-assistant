@@ -12,7 +12,7 @@ from src.adapters.career_ops_profile import CareerOpsProfileBundle
 from src.domain.candidate import CandidateProfile
 from src.domain.evaluation import JobEvaluation
 from src.domain.job import CurrentSnapshotRecord
-from src.domain.material import MaterialCheck
+from src.domain.material import MaterialCheck, MaterialMode
 from src.materials.template import ResumeTemplate, TailoredResumeSections
 
 _CAPABILITIES = [
@@ -46,6 +46,9 @@ class ApplicationMaterialTask(BaseModel):
     evaluation_id: str
     evaluation: JobEvaluation
     material_version: int = Field(gt=0)
+    material_mode: MaterialMode = (
+        MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+    )
     source_cv_path: str
     source_cv_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
     resume_template_id: Literal["bowen-v5"] = "bowen-v5"
@@ -71,6 +74,9 @@ class ApplicationMaterialResult(BaseModel):
     profile_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
     evaluation_id: str
     material_version: int = Field(gt=0)
+    material_mode: MaterialMode = (
+        MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+    )
     source_cv_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
     tailored_sections: TailoredResumeSections
     cover_letter_path: str = Field(min_length=1)
@@ -114,6 +120,9 @@ class ApplicationMaterialAdapter:
         *,
         task_id: str,
         material_version: int,
+        material_mode: MaterialMode = (
+            MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+        ),
         profile: CandidateProfile,
         bundle: CareerOpsProfileBundle,
         snapshot: CurrentSnapshotRecord,
@@ -175,6 +184,7 @@ class ApplicationMaterialAdapter:
             evaluation_id=evaluation.id,
             evaluation=evaluation,
             material_version=material_version,
+            material_mode=material_mode,
             source_cv_path=str(source_cv),
             source_cv_hash=source_hash,
             region_line_budgets={
@@ -214,6 +224,11 @@ class ApplicationMaterialAdapter:
                 "material version",
                 result.material_version,
                 task.material_version,
+            ),
+            (
+                "material mode",
+                result.material_mode,
+                task.material_mode,
             ),
             ("source CV hash", result.source_cv_hash, task.source_cv_hash),
         ]

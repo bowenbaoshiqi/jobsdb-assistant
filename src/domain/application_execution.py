@@ -10,6 +10,7 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.domain.job import ApplyType
+from src.domain.material import MaterialMode
 
 
 class ApplicationExecutionStatus(str, Enum):
@@ -75,7 +76,13 @@ class ApplicationIdentity(BaseModel):
     account_alias: str = Field(min_length=1)
     package_id: str = Field(min_length=1)
     material_version: int = Field(gt=0)
-    resume_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    material_mode: MaterialMode = (
+        MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+    )
+    resume_sha256: str | None = Field(
+        default=None,
+        pattern=r"^[a-f0-9]{64}$",
+    )
     cover_letter_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     apply_type: ApplyType
 
@@ -94,7 +101,7 @@ class ApplicationExecution(BaseModel):
     id: str = Field(min_length=1)
     identity: ApplicationIdentity
     status: ApplicationExecutionStatus
-    remote_resume_filename: str = Field(min_length=1)
+    remote_resume_filename: str | None = Field(default=None, min_length=1)
     error_code: str | None = None
     error_message: str | None = None
     screenshot_path: str | None = None

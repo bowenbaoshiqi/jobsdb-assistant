@@ -19,6 +19,13 @@ class MaterialTaskStatus(str, Enum):
     FAILED = "failed"
 
 
+class MaterialMode(str, Enum):
+    COVER_LETTER_ONLY = "cover_letter_only"
+    TAILORED_RESUME_AND_COVER_LETTER = (
+        "tailored_resume_and_cover_letter"
+    )
+
+
 class MaterialReviewStatus(str, Enum):
     PENDING_REVIEW = "pending_review"
     PENDING_REVIEW_WITH_FACT_WARNING = (
@@ -58,7 +65,10 @@ class ApplicationPackage(BaseModel):
     evaluation_id: str
     profile_version: PositiveInt
     version: PositiveInt
-    resume: MaterialArtifact
+    material_mode: MaterialMode = (
+        MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+    )
+    resume: MaterialArtifact | None
     cover_letter: MaterialArtifact
     cover_letter_word_count: int = Field(ge=100, le=300)
     reviewer: MaterialCheck = Field(default_factory=MaterialCheck)
@@ -74,6 +84,21 @@ class ApplicationPackage(BaseModel):
 
     @model_validator(mode="after")
     def default_review_status(self) -> "ApplicationPackage":
+        if (
+            self.material_mode
+            is MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+            and self.resume is None
+        ):
+            raise ValueError(
+                "resume is required for tailored material mode"
+            )
+        if (
+            self.material_mode is MaterialMode.COVER_LETTER_ONLY
+            and self.resume is not None
+        ):
+            raise ValueError(
+                "cover-letter-only package must not contain a resume"
+            )
         if self.review_status is not None:
             return self
         status = (
