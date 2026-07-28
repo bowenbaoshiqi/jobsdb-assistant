@@ -77,6 +77,15 @@ class TestPlaywrightPageControllerDelegation:
         page.fill.assert_awaited_once_with("#input", "value")
 
     @pytest.mark.asyncio
+    async def test_set_input_files_delegates(self):
+        ctrl, page = self._make()
+        await ctrl.set_input_files('input[type="file"]', "/tmp/cv.pdf")
+        page.set_input_files.assert_awaited_once_with(
+            'input[type="file"]',
+            "/tmp/cv.pdf",
+        )
+
+    @pytest.mark.asyncio
     async def test_type_text_delegates_to_page_type(self):
         """type_text 委托给底层 page.type"""
         ctrl, page = self._make()
