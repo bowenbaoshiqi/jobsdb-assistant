@@ -48,8 +48,15 @@ async def test_discovery_service_marks_zero_result_failed() -> None:
 
 
 async def test_worker_resumes_discovery_and_stops() -> None:
+    calls = 0
+
+    async def run_next() -> bool:
+        nonlocal calls
+        calls += 1
+        return calls == 1
+
     service = SimpleNamespace(
-        run_next=AsyncMock(side_effect=[True, False, False])
+        run_next=AsyncMock(side_effect=run_next)
     )
     worker = JobBatchWorker(service=service, idle_poll_seconds=0.01)
 

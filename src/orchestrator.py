@@ -134,6 +134,7 @@ class Orchestrator:
                 "unknown": 0,
             },
             "failures": [],
+            "job_ids": [],
         }
 
         for job in jobs:
@@ -159,6 +160,7 @@ class Orchestrator:
                 continue
 
             report["captured"] += 1
+            report["job_ids"].append(job.id)
             report[state.value] += 1
             report["apply_types"][capture.apply_type.value] += 1
 
