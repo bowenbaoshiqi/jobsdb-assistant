@@ -5,7 +5,11 @@ from types import SimpleNamespace
 import pytest
 
 from src.dashboard.material_service import DashboardMaterialService
-from src.domain.material import MaterialReviewAction, MaterialReviewStatus
+from src.domain.material import (
+    MaterialMode,
+    MaterialReviewAction,
+    MaterialReviewStatus,
+)
 
 NOW = datetime(2026, 7, 27, tzinfo=UTC)
 
@@ -78,6 +82,39 @@ def test_no_selection_rejects_before_generation() -> None:
         service.create_batch()
 
 
+def test_selected_batch_passes_requested_material_mode() -> None:
+    captured = {}
+
+    class Generation(FakeGeneration):
+        def plan_batch(self, **kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(batch_id=kwargs["batch_id"], pending=())
+
+    database = SimpleNamespace(
+        get_current_job_snapshot_record=lambda job_id: SimpleNamespace(
+            job_id=job_id
+        )
+    )
+    service = DashboardMaterialService(
+        database=database,
+        repository=FakeRepository(),
+        generation=Generation(),
+        materials_root=Path("workspace/materials"),
+        now=lambda: NOW,
+    )
+    service.selections = SimpleNamespace(
+        list_selected=lambda: {"job-1": NOW}
+    )
+    service.profiles = SimpleNamespace(
+        get_active=lambda: SimpleNamespace(version=1)
+    )
+    service.evaluations = SimpleNamespace(list_current=lambda version: [])
+
+    service.create_batch(MaterialMode.COVER_LETTER_ONLY)
+
+    assert captured["material_mode"] is MaterialMode.COVER_LETTER_ONLY
+
+
 def test_review_actions_are_explicit_and_regeneration_keeps_feedback() -> None:
     package = SimpleNamespace(
         id="package-1",
@@ -108,4 +145,3 @@ def test_review_actions_are_explicit_and_regeneration_keeps_feedback() -> None:
     assert rejected.action is MaterialReviewAction.REJECT
     assert regenerated.task.material_version == 2
     assert regenerated.task.feedback == "Emphasise leadership"
-

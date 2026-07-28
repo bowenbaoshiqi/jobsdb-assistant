@@ -14,6 +14,7 @@ from src.domain.material import (
     ApplicationPackage,
     MaterialArtifact,
     MaterialCheck,
+    MaterialMode,
 )
 from src.storage.database import Database
 from src.storage.material_repository import MaterialRepository
@@ -32,6 +33,23 @@ class FakeGeneration:
                 feedback=kwargs["feedback"],
                 status="waiting_for_agent",
             )
+        )
+
+
+class FakeBatchService:
+    def create_batch(self, material_mode):
+        return SimpleNamespace(
+            batch_id="batch-cover",
+            pending=(
+                SimpleNamespace(
+                    task=SimpleNamespace(
+                        task_id="task-cover",
+                        job_id="job-1",
+                        material_version=1,
+                        material_mode=material_mode,
+                    )
+                ),
+            ),
         )
 
 
@@ -192,3 +210,21 @@ def test_material_pdf_never_accepts_request_supplied_path(
         "/api/materials/package-1/pdf",
         params={"path": "/etc/passwd"},
     ).content.startswith(b"%PDF-")
+
+
+def test_material_batch_accepts_cover_letter_only_mode() -> None:
+    from fastapi import FastAPI
+
+    from src.dashboard.material_routes import material_router
+
+    app = FastAPI()
+    app.include_router(material_router(FakeBatchService()))
+    response = TestClient(app).post(
+        "/api/material-batches",
+        json={"material_mode": "cover_letter_only"},
+    )
+
+    assert response.status_code == 202
+    assert response.json()["material_mode"] == (
+        MaterialMode.COVER_LETTER_ONLY.value
+    )
