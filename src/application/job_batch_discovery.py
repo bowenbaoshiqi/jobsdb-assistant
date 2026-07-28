@@ -11,6 +11,7 @@ DiscoveryRunner = Callable[
     [str, int, set[str]],
     Awaitable[dict],
 ]
+ScoringPreparer = Callable[[str, list[str]], Awaitable[None]]
 
 
 class JobBatchDiscoveryService:
@@ -19,13 +20,29 @@ class JobBatchDiscoveryService:
         repository: JobBatchRepository,
         *,
         runner: DiscoveryRunner,
+        scoring_preparer: ScoringPreparer | None = None,
     ) -> None:
         self.repository = repository
         self.runner = runner
+        self.scoring_preparer = scoring_preparer
 
     async def run_next(self) -> bool:
         batch = self.repository.current()
-        if batch is None or batch.status != "discovering":
+        if batch is None:
+            return False
+        if batch.status == "waiting_for_scoring":
+            if self.scoring_preparer is None:
+                return False
+            try:
+                await self.scoring_preparer(
+                    batch.id,
+                    self.repository.current_job_ids(),
+                )
+                self.repository.mark_scoring(batch.id)
+            except Exception as exc:
+                self.repository.mark_failed(batch.id, str(exc))
+            return True
+        if batch.status != "discovering":
             return False
         try:
             report = await self.runner(

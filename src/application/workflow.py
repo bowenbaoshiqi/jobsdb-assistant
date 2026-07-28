@@ -116,7 +116,12 @@ class CandidateEvaluationWorkflow:
             confirmed_at=confirmed_at,
         )
 
-    def prepare_evaluations(self, run_id: str) -> EvaluationPlan:
+    def prepare_evaluations(
+        self,
+        run_id: str,
+        *,
+        job_ids: set[str] | None = None,
+    ) -> EvaluationPlan:
         self._ensure_integrations(first_run=False)
         profile = self.profiles.get_active()
         if profile is None:
@@ -126,10 +131,17 @@ class CandidateEvaluationWorkflow:
                 "active candidate profile requires explicit update "
                 "before career-ops evaluation"
             )
+        snapshots = self.database.list_current_snapshot_records()
+        if job_ids is not None:
+            snapshots = [
+                snapshot
+                for snapshot in snapshots
+                if snapshot.job_id in job_ids
+            ]
         return self.evaluations.plan(
             run_id,
             profile,
-            self.database.list_current_snapshot_records(),
+            snapshots,
         )
 
     def submit_evaluation_result(

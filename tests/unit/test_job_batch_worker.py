@@ -47,6 +47,30 @@ async def test_discovery_service_marks_zero_result_failed() -> None:
     repository.mark_failed.assert_called_once()
 
 
+async def test_discovery_service_prepares_scoring_for_ready_batch() -> None:
+    repository = MagicMock()
+    repository.current.return_value = SimpleNamespace(
+        id="batch-1",
+        keyword="AI Lead",
+        status="waiting_for_scoring",
+    )
+    repository.current_job_ids.return_value = ["job-1", "job-2"]
+    scoring_preparer = AsyncMock()
+    service = JobBatchDiscoveryService(
+        repository,
+        runner=AsyncMock(),
+        scoring_preparer=scoring_preparer,
+    )
+
+    assert await service.run_next() is True
+
+    scoring_preparer.assert_awaited_once_with(
+        "batch-1",
+        ["job-1", "job-2"],
+    )
+    repository.mark_scoring.assert_called_once_with("batch-1")
+
+
 async def test_worker_resumes_discovery_and_stops() -> None:
     calls = 0
 

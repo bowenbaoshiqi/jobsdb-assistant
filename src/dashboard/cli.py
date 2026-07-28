@@ -23,10 +23,16 @@ from src.application.approved_worker import ApprovedApplicationWorker
 from src.application.execute_application import ApplicationExecutionService
 from src.application.job_batch_discovery import JobBatchDiscoveryService
 from src.application.job_batch_worker import JobBatchWorker
-from src.application.runtime import build_material_generation_service
+from src.application.runtime import (
+    build_material_generation_service,
+    build_workflow,
+)
 from src.dashboard.app import DashboardDependencies, create_dashboard_app
 from src.dashboard.application_service import DashboardApplicationService
-from src.dashboard.evaluation_progress import EvaluationProgressStore
+from src.dashboard.evaluation_progress import (
+    EvaluationProgressStore,
+    EvaluationTaskStatus,
+)
 from src.dashboard.material_service import DashboardMaterialService
 from src.dashboard.query_service import DashboardQueryService
 from src.orchestrator import Orchestrator
@@ -190,10 +196,39 @@ def build_production_app():
             excluded_job_ids=excluded_job_ids,
         )
 
+    progress_store = EvaluationProgressStore(
+        Path("workspace/dashboard/evaluation-progress.json")
+    )
+
+    async def prepare_batch_scoring(
+        batch_id: str,
+        job_ids: list[str],
+    ) -> None:
+        workflow = build_workflow()
+        plan = workflow.prepare_evaluations(
+            batch_id,
+            job_ids=set(job_ids),
+        )
+        task_ids = [item.task.task_id for item in plan.pending]
+        cached_ids = [
+            f"cached-{item.id}"
+            for item in plan.cached
+        ]
+        progress_store.start(
+            task_ids + cached_ids,
+            now=datetime.now(UTC),
+        )
+        for task_id in cached_ids:
+            progress_store.mark(
+                task_id,
+                EvaluationTaskStatus.COMPLETED,
+            )
+
     job_batch_worker = JobBatchWorker(
         service=JobBatchDiscoveryService(
             job_batches,
             runner=discover_batch,
+            scoring_preparer=prepare_batch_scoring,
         )
     )
 
@@ -236,9 +271,7 @@ def build_production_app():
             ),
             selection_repository=SelectionRepository(database),
             application_service=application_service,
-            evaluation_progress=EvaluationProgressStore(
-                Path("workspace/dashboard/evaluation-progress.json")
-            ),
+            evaluation_progress=progress_store,
             material_service=DashboardMaterialService(
                 database=database,
                 repository=material_generation.repository,

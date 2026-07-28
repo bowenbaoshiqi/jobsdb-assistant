@@ -107,6 +107,9 @@ class JobBatchRepository:
     def mark_ready(self, batch_id: str) -> None:
         self._set_status(batch_id, "waiting_for_scoring")
 
+    def mark_scoring(self, batch_id: str) -> None:
+        self._set_status(batch_id, "scoring")
+
     def mark_failed(self, batch_id: str, message: str) -> None:
         with self.database._connect() as conn:
             conn.execute(
