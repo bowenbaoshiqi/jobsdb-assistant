@@ -3,7 +3,7 @@
 import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.responses import FileResponse, HTMLResponse
@@ -86,6 +86,37 @@ def register_routes(app: FastAPI, dependencies) -> None:
                 "failed": 0,
             }
         return dependencies.evaluation_progress.get()
+
+    @app.post("/api/evaluation-backfill")
+    async def backfill_evaluations(
+        scope: Annotated[Literal["all", "selected"], Query()],
+    ):
+        store = dependencies.evaluation_progress
+        if store is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="evaluation progress is unavailable",
+            )
+        page = dependencies.query_service.list_jobs(
+            DashboardFilters(
+                show="all",
+                selected=True if scope == "selected" else None,
+            )
+        )
+        task_ids = [
+            job.job_id
+            for job in page.jobs
+            if job.evaluation_status == "pending"
+        ]
+        batch, appended = store.append(
+            task_ids,
+            now=datetime.now(UTC),
+        )
+        return {
+            "batch_id": None if batch is None else batch.id,
+            "appended": appended,
+            "progress": store.get(),
+        }
 
     @app.put("/api/selections/{job_id}")
     async def select(job_id: str):
