@@ -1,5 +1,6 @@
-"""Construct the real local v0.3 workflow."""
+"""Construct the real local workflow."""
 
+import os
 from pathlib import Path
 
 from config.settings import get_config
@@ -35,6 +36,12 @@ def build_material_generation_service(
         adapter=ApplicationMaterialAdapter(
             material_spec.commit,
             material_spec.contract_version,
+            resume_template_path=Path(
+                os.environ.get(
+                    "JOBSDB_RESUME_TEMPLATE_PATH",
+                    root / "workspace" / "resume-template-v5.pdf",
+                )
+            ),
         ),
         checkpoints=CheckpointStore(root / "workspace" / "ai-tasks"),
         profile_projector=CareerOpsProfileAdapter(

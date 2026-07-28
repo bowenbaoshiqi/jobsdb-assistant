@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -98,9 +99,15 @@ class ApplicationMaterialAdapter:
         self,
         integration_commit: str,
         contract_version: str,
+        resume_template_path: Path | None = None,
     ) -> None:
         self.integration_commit = integration_commit
         self.contract_version = contract_version
+        self.resume_template_path = (
+            None
+            if resume_template_path is None
+            else resume_template_path.expanduser().resolve()
+        )
 
     def build_task(
         self,
@@ -133,9 +140,15 @@ class ApplicationMaterialAdapter:
             raise ValueError("evaluation profile identity mismatch")
         if not evaluation.id:
             raise ValueError("evaluation id is required")
-        source_cv = bundle.cv_path
-        if not source_cv.is_file():
-            raise ValueError("source CV does not exist")
+        source_cv = self.resume_template_path or bundle.cv_path.resolve()
+        if (
+            not source_cv.is_file()
+            or source_cv.suffix.casefold() != ".pdf"
+            or source_cv.read_bytes()[:5] != b"%PDF-"
+        ):
+            raise ValueError(
+                "fixed v5 resume template PDF does not exist"
+            )
         source_hash = hashlib.sha256(source_cv.read_bytes()).hexdigest()
         template = ResumeTemplate.v5()
         return ApplicationMaterialTask(

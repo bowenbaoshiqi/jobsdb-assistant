@@ -27,6 +27,11 @@ uv run jobsdb-assistant doctor
 依赖版本由 `uv.lock` 固定。其他电脑首次使用时，在仓库根目录执行以上相同命令，
 即可创建统一的项目 `.venv`；不要为 Dashboard 单独创建第二套环境。
 
+将唯一的两页 v5 简历 PDF 放在私有路径
+`workspace/resume-template-v5.pdf`。也可通过
+`JOBSDB_RESUME_TEMPLATE_PATH=/absolute/path/resume-v5.pdf` 指定其他位置。
+career-ops 的 `cv.md` 只作为评分上下文，不会被误当成 PDF 模板。
+
 ### 2. 发现职位（不会投递）
 
 ```bash
