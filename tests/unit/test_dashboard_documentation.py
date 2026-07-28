@@ -13,7 +13,9 @@ def test_readme_documents_reproducible_local_dashboard() -> None:
     assert "no cover letter" in readme
     assert "Ctrl+C" in readme
     assert "v0.6.0" in readme
-    assert "为已选职位生成定制材料" in readme
+    assert "仅定制求职信" in readme
+    assert "定制简历 + 求职信" in readme
+    assert "不删除、上传或切换简历" in readme
     assert "100–300" in readme
     assert "Reviewer" in readme
     assert "ATS" in readme
@@ -24,7 +26,7 @@ def test_readme_documents_reproducible_local_dashboard() -> None:
     assert "Professional Summary" in readme
     assert "Career Highlights" in readme
     assert "Core Competencies" in readme
-    assert "删除 JobsDB 中已有的全部简历" in readme
+    assert "保留默认简历、删除其他非默认简历" in readme
     assert "确认提交" in readme
     assert "workspace/materials/" in readme
 
