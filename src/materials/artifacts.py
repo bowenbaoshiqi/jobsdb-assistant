@@ -17,10 +17,10 @@ _SAFE_JOB_ID = re.compile(r"^[A-Za-z0-9_-]+$")
 @dataclass(frozen=True)
 class InstalledPackageFiles:
     root: Path
-    resume_path: Path
+    resume_path: Path | None
     cover_letter_path: Path
     manifest_path: Path
-    resume_sha256: str
+    resume_sha256: str | None
     cover_letter_sha256: str
 
 
@@ -95,17 +95,21 @@ def safe_material_path(
 def install_package_files(
     *,
     staging_root: Path,
-    resume_path: Path,
+    resume_path: Path | None,
     cover_letter_path: Path,
     materials_root: Path,
     job_id: str,
     version: int,
     manifest: dict,
 ) -> InstalledPackageFiles:
-    resume = validate_staged_artifact(
-        resume_path,
-        staging_root,
-        kind="pdf",
+    resume = (
+        None
+        if resume_path is None
+        else validate_staged_artifact(
+            resume_path,
+            staging_root,
+            kind="pdf",
+        )
     )
     cover = validate_staged_artifact(
         cover_letter_path,
@@ -118,12 +122,19 @@ def install_package_files(
     temporary = target.with_name(f".{target.name}-{uuid.uuid4().hex}.tmp")
     temporary.mkdir(parents=True)
     try:
-        installed_resume = temporary / "cv.pdf"
+        installed_resume = (
+            None if resume is None else temporary / "cv.pdf"
+        )
         installed_cover = temporary / "cover-letter.txt"
         installed_manifest = temporary / "manifest.json"
-        shutil.copyfile(resume, installed_resume)
+        if resume is not None and installed_resume is not None:
+            shutil.copyfile(resume, installed_resume)
         shutil.copyfile(cover, installed_cover)
-        resume_hash = hash_file(installed_resume)
+        resume_hash = (
+            None
+            if installed_resume is None
+            else hash_file(installed_resume)
+        )
         cover_hash = hash_file(installed_cover)
         payload = {
             **manifest,
@@ -147,7 +158,7 @@ def install_package_files(
         raise
     return InstalledPackageFiles(
         root=target,
-        resume_path=target / "cv.pdf",
+        resume_path=(None if resume is None else target / "cv.pdf"),
         cover_letter_path=target / "cover-letter.txt",
         manifest_path=target / "manifest.json",
         resume_sha256=resume_hash,

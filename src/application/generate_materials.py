@@ -24,6 +24,7 @@ from src.domain.material import (
     ApplicationPackage,
     MaterialArtifact,
     MaterialCheck,
+    MaterialMode,
     MaterialReviewAction,
 )
 from src.materials.artifacts import (
@@ -78,6 +79,9 @@ class MaterialGenerationService:
         profile: CandidateProfile,
         snapshots: list[CurrentSnapshotRecord],
         evaluations: list[JobEvaluation],
+        material_mode: MaterialMode = (
+            MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+        ),
         created_at: datetime,
     ) -> MaterialBatchPlan:
         if not profile.confirmed_at or not profile.content_hash:
@@ -104,12 +108,14 @@ class MaterialGenerationService:
             version = 1 if latest is None else latest.version + 1
             identity = (
                 f"{batch_id}:{snapshot.job_id}:{snapshot.snapshot_id}:"
-                f"{profile.content_hash}:{evaluation.id}:{version}"
+                f"{profile.content_hash}:{evaluation.id}:{version}:"
+                f"{material_mode.value}"
             ).encode()
             task_id = f"material-{hashlib.sha256(identity).hexdigest()[:16]}"
             task = self.adapter.build_task(
                 task_id=task_id,
                 material_version=version,
+                material_mode=material_mode,
                 profile=profile,
                 bundle=bundle,
                 snapshot=snapshot,
@@ -228,29 +234,55 @@ class MaterialGenerationService:
             task.task_id,
             result.cover_letter_path,
         )
-        source = Path(task.source_cv_path).resolve()
-        if not source.is_file() or hash_file(source) != task.source_cv_hash:
-            raise ValueError("source CV hash mismatch before rendering")
-        resume = staging / "cv.pdf"
-        template = ResumeTemplate.v5()
-        rendered = render_tailored_resume(
-            source,
-            resume,
-            result.tailored_sections,
-            template,
-        )
-        if rendered.overflow:
-            details = ", ".join(
-                f"{item.region}:{item.actual_lines}/{item.maximum_lines}"
-                for item in rendered.overflow
+        resume: Path | None = None
+        layout = MaterialCheck()
+        layout_manifest: dict = {"passed": True, "findings": []}
+        if (
+            task.material_mode
+            is MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+        ):
+            source = Path(task.source_cv_path).resolve()
+            if (
+                not source.is_file()
+                or hash_file(source) != task.source_cv_hash
+            ):
+                raise ValueError(
+                    "source CV hash mismatch before rendering"
+                )
+            resume = staging / "cv.pdf"
+            template = ResumeTemplate.v5()
+            rendered = render_tailored_resume(
+                source,
+                resume,
+                result.tailored_sections,
+                template,
             )
-            raise ValueError(f"resume layout overflow: {details}")
-        layout = validate_tailored_pdf(source, resume, template)
-        if not layout.passed:
-            raise ValueError(
-                "resume layout validation failed: "
-                + ", ".join(layout.codes)
+            if rendered.overflow:
+                details = ", ".join(
+                    f"{item.region}:{item.actual_lines}/"
+                    f"{item.maximum_lines}"
+                    for item in rendered.overflow
+                )
+                raise ValueError(f"resume layout overflow: {details}")
+            validation = validate_tailored_pdf(source, resume, template)
+            if not validation.passed:
+                raise ValueError(
+                    "resume layout validation failed: "
+                    + ", ".join(validation.codes)
+                )
+            layout = MaterialCheck(
+                passed=validation.passed,
+                findings=list(validation.findings),
             )
+            layout_manifest = {
+                "passed": validation.passed,
+                "codes": list(validation.codes),
+                "findings": list(validation.findings),
+                "page_count": validation.page_count,
+                "extractable_characters": (
+                    validation.extractable_characters
+                ),
+            }
         cover_text = cover.read_text(encoding="utf-8")
         if cover_text.strip() != result.cover_letter_text.strip():
             raise ValueError("cover letter artifact content mismatch")
@@ -268,20 +300,13 @@ class MaterialGenerationService:
             version=task.material_version,
             manifest={
                 "task_id": task.task_id,
+                "material_mode": task.material_mode.value,
                 "change_summary": result.change_summary,
                 "resume_template_id": task.resume_template_id,
                 "tailored_sections": result.tailored_sections.model_dump(
                     mode="json"
                 ),
-                "layout": {
-                    "passed": layout.passed,
-                    "codes": list(layout.codes),
-                    "findings": list(layout.findings),
-                    "page_count": layout.page_count,
-                    "extractable_characters": (
-                        layout.extractable_characters
-                    ),
-                },
+                "layout": layout_manifest,
                 "engine_provenance": result.engine_provenance,
                 "prompt_provenance": result.prompt_provenance,
             },
@@ -292,9 +317,15 @@ class MaterialGenerationService:
             evaluation_id=task.evaluation_id,
             profile_version=task.profile_version,
             version=task.material_version,
-            resume=MaterialArtifact(
-                path=str(installed.resume_path),
-                sha256=installed.resume_sha256,
+            material_mode=task.material_mode,
+            resume=(
+                None
+                if installed.resume_path is None
+                or installed.resume_sha256 is None
+                else MaterialArtifact(
+                    path=str(installed.resume_path),
+                    sha256=installed.resume_sha256,
+                )
             ),
             cover_letter=MaterialArtifact(
                 path=str(installed.cover_letter_path),
@@ -304,9 +335,6 @@ class MaterialGenerationService:
             reviewer=result.reviewer,
             ats=result.ats,
             facts=result.facts,
-            layout=MaterialCheck(
-                passed=layout.passed,
-                findings=list(layout.findings),
-            ),
+            layout=layout,
             created_at=completed_at,
         )

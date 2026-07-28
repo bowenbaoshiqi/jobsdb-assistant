@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from src.application.generate_materials import MaterialGenerationService
-from src.domain.material import MaterialReviewAction
+from src.domain.material import MaterialMode, MaterialReviewAction
 from src.storage.candidate_repository import CandidateRepository
 from src.storage.database import Database
 from src.storage.evaluation_repository import EvaluationRepository
@@ -36,7 +36,12 @@ class DashboardMaterialService:
         self.profiles = CandidateRepository(database)
         self.evaluations = EvaluationRepository(database)
 
-    def create_batch(self):
+    def create_batch(
+        self,
+        material_mode: MaterialMode = (
+            MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+        ),
+    ):
         selected = self.selections.list_selected()
         if not selected:
             raise ValueError("at least one selected job is required")
@@ -56,6 +61,7 @@ class DashboardMaterialService:
             profile=profile,
             snapshots=snapshots,
             evaluations=evaluations,
+            material_mode=material_mode,
             created_at=self.now(),
         )
 
@@ -89,6 +95,10 @@ class DashboardMaterialService:
 
     def pdf_path(self, package_id: str) -> Path:
         package = self.repository.get_package(package_id)
+        if package.resume is None:
+            raise ValueError(
+                "cover-letter-only material has no tailored resume"
+            )
         return self._private_file(
             Path(package.resume.path),
             expected_hash=package.resume.sha256,
@@ -98,6 +108,10 @@ class DashboardMaterialService:
         package = self.repository.current_approved_for_job(job_id)
         if package is None:
             raise ValueError("current approved package is required")
+        if package.resume is None:
+            raise ValueError(
+                "approved material uses the JobsDB default resume"
+            )
         return self._private_file(
             Path(package.resume.path),
             expected_hash=package.resume.sha256,
