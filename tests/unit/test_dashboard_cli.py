@@ -136,6 +136,9 @@ def test_build_production_app_does_not_require_login(
     dashboard = cli.build_production_app()
 
     assert dashboard.title == "JobsDB Assistant"
+    dependencies = dashboard.state.dashboard_dependencies
+    assert dependencies.approved_application_service is not None
+    assert dashboard.state.approved_application_worker is not None
 
 
 def test_start_with_browser_launches_readiness_thread(monkeypatch) -> None:
