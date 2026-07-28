@@ -13,7 +13,7 @@ def _context() -> ApplicationMaterialContext:
         package_id="package-1",
         resume_filename="JBA_92358982_v1_12345678.pdf",
         resume_sha256="a" * 64,
-        cover_letter_text="A focused cover letter.",
+        cover_letter_text=" ".join(["focused"] * 100),
         cover_letter_sha256="b" * 64,
     )
 
