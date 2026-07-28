@@ -20,14 +20,16 @@ label[for] 指向的 radio id 动态生成(如 id-_r_2d_),无固定选择器。
 """
 
 import asyncio
+import json
 
 from src.browser.ports.page_controller import PageController
+from src.jobsdb.apply.context import ApplicationMaterialContext
 from src.jobsdb.apply.steps.cover_letter_js import (
     _CLICK_NO_COVER_LETTER_JS,
     _HAS_COVER_LETTER_JS,
 )
 from src.jobsdb.apply.steps.navigation import click_next_or_submit
-from src.jobsdb.selectors import COVER_LETTER_SECTION
+from src.jobsdb.selectors import CONTINUE_BUTTON, COVER_LETTER_SECTION
 
 # v1.0 _handle_cover_letter_step 的通用求职信内容(保留:某些职位强制要求写求职信,
 # 此时 "Don't include" 不可选,需 fallback 写一段进 textarea。当前主路径用不到。)
@@ -41,11 +43,42 @@ _COVER_LETTER = (
 
 # 底部 Continue 按钮。用 :has-text("Continue") 而非固定 id/class;
 # Playwright 的 :has-text 会归一化零宽字符(U+2060),实测能命中真实按钮。
-_CONTINUE_BUTTON = 'button:has-text("Continue")'
+def _fill_cover_letter_js(text: str) -> str:
+    encoded = json.dumps(text)
+    return f"""() => {{
+      const approved = {encoded};
+      const labels = Array.from(document.querySelectorAll('label'));
+      const include = labels.find(label =>
+        /write a cover letter|include a cover letter/i.test(label.textContent || '')
+        && !/don't|do not/i.test(label.textContent || '')
+      );
+      if (include) include.click();
+      const textarea = document.querySelector(
+        'textarea[data-automation="cover-letter-text"], '
+        + 'textarea[placeholder*="cover letter" i], textarea'
+      );
+      if (!textarea) return {{ selected: Boolean(include), filled: false }};
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype, 'value'
+      ).set;
+      setter.call(textarea, approved);
+      textarea.dispatchEvent(new Event('input', {{ bubbles: true }}));
+      textarea.dispatchEvent(new Event('change', {{ bubbles: true }}));
+      return {{
+        selected: Boolean(include),
+        filled: textarea.value === approved
+      }};
+    }}"""
 
 
 class CoverLetterStep:
     """COVER_LETTER 步骤处理器"""
+
+    def __init__(
+        self,
+        context: ApplicationMaterialContext | None = None,
+    ) -> None:
+        self.context = context
 
     async def detect(self, page: PageController) -> bool:
         """当前页是否为求职信步骤。
@@ -63,6 +96,25 @@ class CoverLetterStep:
     async def handle(self, page: PageController, human=None) -> bool:
         """处理求职信:选 "Don't include a cover letter" → 点 Continue。"""
         try:
+            if self.context is not None:
+                filled = await page.evaluate(
+                    _fill_cover_letter_js(self.context.cover_letter_text)
+                )
+                if (
+                    not isinstance(filled, dict)
+                    or filled.get("selected") is not True
+                    or filled.get("filled") is not True
+                ):
+                    return False
+                continue_btn = await page.query_selector(CONTINUE_BUTTON)
+                if not continue_btn or not await continue_btn.is_visible():
+                    return False
+                if human:
+                    await human.mouse.click_element(continue_btn)
+                else:
+                    await continue_btn.click()
+                return True
+
             selected = False
             try:
                 result = await page.evaluate(_CLICK_NO_COVER_LETTER_JS)
@@ -79,11 +131,11 @@ class CoverLetterStep:
                 logger.info("Selected 'Don't include a cover letter'")
                 await asyncio.sleep(0.5)
 
-            # 真实 Continue 按钮必须用 Playwright 原生 click() 才能触发 React 跳转。
-            continue_btn = await page.query_selector(_CONTINUE_BUTTON)
-            if continue_btn:
-                is_visible = await continue_btn.is_visible()
-                if is_visible:
+            if selected:
+                # 真实 Continue 按钮必须用 Playwright 原生 click() 才能触发
+                # React 跳转。
+                continue_btn = await page.query_selector(CONTINUE_BUTTON)
+                if continue_btn and await continue_btn.is_visible():
                     if human:
                         await human.mouse.click_element(continue_btn)
                     else:
@@ -92,15 +144,14 @@ class CoverLetterStep:
                     return True
 
             # 兜底:填 textarea 或点 Next/Submit
-            if not selected:
-                from src.jobsdb.selectors import COVER_LETTER_TEXTAREA
-                textarea = await page.query_selector(COVER_LETTER_TEXTAREA)
-                if textarea:
-                    if human:
-                        await human.fill_form_field(textarea, _COVER_LETTER)
-                    else:
-                        await textarea.fill(_COVER_LETTER)
-                    await asyncio.sleep(0.5)
+            from src.jobsdb.selectors import COVER_LETTER_TEXTAREA
+            textarea = await page.query_selector(COVER_LETTER_TEXTAREA)
+            if textarea:
+                if human:
+                    await human.fill_form_field(textarea, _COVER_LETTER)
+                else:
+                    await textarea.fill(_COVER_LETTER)
+                await asyncio.sleep(0.5)
 
             return await click_next_or_submit(page, human)
 

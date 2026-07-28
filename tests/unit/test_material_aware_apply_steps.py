@@ -13,7 +13,6 @@ from src.jobsdb.apply.steps.review_step import (
 from src.jobsdb.selectors import (
     CONTINUE_BUTTON,
     NEXT_STEP_BUTTON,
-    RESUME_SELECTION,
     SUBMIT_APPLICATION_BUTTON,
     SUCCESS_MESSAGE,
 )

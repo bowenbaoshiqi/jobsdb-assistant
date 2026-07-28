@@ -12,6 +12,7 @@ class ApplyStatus(str, Enum):
     FAILED = "failed"           # 失败
     SKIPPED = "skipped"         # 跳过（已投递过）
     CAPTCHA = "captcha"         # 遇到验证码
+    READY_FOR_REVIEW = "ready_for_review"
 
 
 class SessionStatus(str, Enum):
