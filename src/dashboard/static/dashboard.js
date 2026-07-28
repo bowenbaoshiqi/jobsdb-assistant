@@ -22,7 +22,8 @@ const elements = {
   progressCompleted: document.querySelector("#progress-completed"),
   progressFailed: document.querySelector("#progress-failed"),
   refreshResults: document.querySelector("#refresh-results"),
-  generateMaterials: document.querySelector("#generate-materials"),
+  generateCoverLetters: document.querySelector("#generate-cover-letters"),
+  generateFullMaterials: document.querySelector("#generate-full-materials"),
   materialBatchStatus: document.querySelector("#material-batch-status"),
   materialBatchNote: document.querySelector("#material-batch-note"),
   nextBatchKeyword: document.querySelector("#next-batch-keyword"),
@@ -33,6 +34,11 @@ const elements = {
 
 let currentPage = null;
 let pendingApplyJob = null;
+
+function setMaterialButtonsDisabled(disabled) {
+  elements.generateCoverLetters.disabled = disabled;
+  elements.generateFullMaterials.disabled = disabled;
+}
 
 function text(tag, value, className = "") {
   const node = document.createElement(tag);
@@ -347,7 +353,7 @@ async function updateSelection(job, checkbox) {
     job.selection_status = intended ? "waiting_for_materials" : null;
     currentPage.summary.selected += intended ? 1 : -1;
     elements.selectedCount.textContent = currentPage.summary.selected;
-    elements.generateMaterials.disabled = currentPage.summary.selected === 0;
+    setMaterialButtonsDisabled(currentPage.summary.selected === 0);
     setStatus(`${job.title} 已${intended ? "选择" : "取消选择"}。`);
   } catch (error) {
     checkbox.checked = !intended;
@@ -415,7 +421,7 @@ async function loadJobs({ preserveContentOnError = false } = {}) {
     elements.evaluatedCount.textContent = currentPage.summary.evaluated;
     elements.pendingCount.textContent = currentPage.summary.pending;
     elements.selectedCount.textContent = currentPage.summary.selected;
-    elements.generateMaterials.disabled = currentPage.summary.selected === 0;
+    setMaterialButtonsDisabled(currentPage.summary.selected === 0);
     const cards = currentPage.jobs.map(renderJob);
     elements.list.replaceChildren(
       ...(cards.length ? cards : [text("p", "没有符合当前筛选条件的职位。", "muted")]),
@@ -426,24 +432,30 @@ async function loadJobs({ preserveContentOnError = false } = {}) {
   }
 }
 
-async function generateSelectedMaterials() {
-  elements.generateMaterials.disabled = true;
-  elements.generateMaterials.textContent = "正在创建任务…";
+async function generateSelectedMaterials(mode, button) {
+  const originalLabel = button.textContent;
+  setMaterialButtonsDisabled(true);
+  button.textContent = "正在创建任务…";
   setError();
   try {
-    const response = await fetch("/api/material-batches", { method: "POST" });
+    const response = await fetch("/api/material-batches", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ material_mode: mode }),
+    });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.detail || "无法创建材料生成任务。");
     elements.materialBatchStatus.hidden = false;
     elements.materialBatchNote.textContent =
-      `批次 ${payload.batch_id}：已创建 ${payload.tasks.length} 个独立职位任务。` +
+      `批次 ${payload.batch_id}：已创建 ${payload.tasks.length} 个独立职位任务（` +
+      `${mode === "cover_letter_only" ? "默认简历 + 定制求职信" : "定制简历 + 求职信"}）。` +
       "请保持当前 CC/Codex Agent 会话运行，完成后手动刷新页面。";
     setStatus(`已创建 ${payload.tasks.length} 个材料生成任务。`);
   } catch (error) {
     setError(error.message);
   } finally {
-    elements.generateMaterials.disabled = !currentPage?.summary.selected;
-    elements.generateMaterials.textContent = "为已选职位生成定制材料";
+    setMaterialButtonsDisabled(!currentPage?.summary.selected);
+    button.textContent = originalLabel;
   }
 }
 
@@ -564,7 +576,20 @@ elements.refreshBatchStatus.addEventListener("click", async () => {
   await Promise.all([loadBatchStatus(), loadJobs({ preserveContentOnError: true })]);
 });
 elements.archiveAndDiscover.addEventListener("click", archiveAndDiscover);
-elements.generateMaterials.addEventListener("click", generateSelectedMaterials);
+elements.generateCoverLetters.addEventListener(
+  "click",
+  () => generateSelectedMaterials(
+    "cover_letter_only",
+    elements.generateCoverLetters,
+  ),
+);
+elements.generateFullMaterials.addEventListener(
+  "click",
+  () => generateSelectedMaterials(
+    "tailored_resume_and_cover_letter",
+    elements.generateFullMaterials,
+  ),
+);
 
 filtersFromUrl();
 loadJobs();

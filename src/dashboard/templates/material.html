@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>定制申请材料 · JobsDB 求职助手</title>
     <link rel="stylesheet" href="/static/material.css">
-    <script src="/static/material.js?v=0.6.0-pdf-preview" defer></script>
+    <script src="/static/material.js?v=0.6.0-material-modes" defer></script>
   </head>
   <body data-package-id="{{ package_id }}">
     <main class="material-shell">
@@ -29,12 +29,16 @@
       </section>
 
       <section class="preview-grid">
-        <article class="panel resume-panel">
+        <article id="resume-panel" class="panel resume-panel">
           <div class="panel-heading">
             <h2>英文定制简历 PDF</h2>
             <a id="resume-download" class="button-link" download>下载 PDF</a>
           </div>
           <iframe id="resume-preview" title="英文定制简历 PDF 预览"></iframe>
+        </article>
+        <article id="default-resume-notice" class="panel resume-panel" hidden>
+          <h2>使用 JobsDB 默认简历</h2>
+          <p>此材料仅定制求职信。投递时不会删除、上传或切换简历。</p>
         </article>
 
         <article class="panel cover-panel">
