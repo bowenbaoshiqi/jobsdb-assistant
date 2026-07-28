@@ -17,6 +17,7 @@ from src.domain.application_execution import (
 )
 from src.domain.job import ApplyType, JobDetailCapture
 from src.storage.database import Database
+from src.storage.job_batch_repository import JobBatchRepository
 from src.storage.selection_repository import SelectionRepository
 
 NOW = datetime(2026, 7, 27, 9, 0, tzinfo=UTC)
@@ -82,6 +83,10 @@ def dashboard_api(tmp_path) -> tuple[TestClient, AsyncMock]:
         resume_path=Path("/private/cv.pdf"),
         cover_letter_text="Approved cover letter.",
     )
+    batches = JobBatchRepository(database)
+    batch = batches.create("AI Lead", now=NOW)
+    batches.add_jobs(batch.id, ["quick-1", "apply-1"], now=NOW)
+    batches.mark_ready(batch.id)
     app = create_dashboard_app(
         DashboardDependencies(
             database=database,
@@ -92,6 +97,7 @@ def dashboard_api(tmp_path) -> tuple[TestClient, AsyncMock]:
             evaluation_progress=EvaluationProgressStore(
                 tmp_path / "evaluation-progress.json"
             ),
+            job_batch_repository=batches,
         )
     )
     return TestClient(app), runner
@@ -136,6 +142,35 @@ def test_evaluation_progress_endpoint_reports_current_batch(
     assert response.json()["status"] == "active"
     assert response.json()["total"] == 2
     assert response.json()["queued"] == 2
+
+
+def test_archive_current_batch_and_start_next_discovery(
+    dashboard_api: tuple[TestClient, AsyncMock],
+) -> None:
+    client, _runner = dashboard_api
+
+    response = client.post(
+        "/api/job-batches/next",
+        json={"keyword": "AI Lead"},
+    )
+
+    assert response.status_code == 202
+    assert response.json()["status"] == "discovering"
+    assert response.json()["keyword"] == "AI Lead"
+    assert client.get("/api/jobs", params={"show": "all"}).json()["jobs"] == []
+
+
+def test_next_batch_requires_keyword(
+    dashboard_api: tuple[TestClient, AsyncMock],
+) -> None:
+    client, _runner = dashboard_api
+
+    response = client.post(
+        "/api/job-batches/next",
+        json={"keyword": "  "},
+    )
+
+    assert response.status_code == 422
 
 
 def test_selection_lifecycle(
@@ -295,6 +330,9 @@ def test_page_contains_review_and_safe_action_controls(
     assert 'id="evaluation-progress"' in html
     assert 'id="refresh-results"' in html
     assert "刷新评分结果" in html
+    assert 'id="next-batch-keyword"' in html
+    assert "归档当前批次并抓取下一批" in html
+    assert "刷新批次状态" in html
     assert "使用已批准材料准备申请" in html
     assert "确认并提交申请" in html
     assert "下载定制简历并人工投递" in html
