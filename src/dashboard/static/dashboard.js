@@ -21,6 +21,8 @@ const elements = {
   progressRunning: document.querySelector("#progress-running"),
   progressCompleted: document.querySelector("#progress-completed"),
   progressFailed: document.querySelector("#progress-failed"),
+  backfillAll: document.querySelector("#backfill-all-evaluations"),
+  backfillSelected: document.querySelector("#backfill-selected-evaluations"),
   refreshResults: document.querySelector("#refresh-results"),
   generateMaterials: document.querySelector("#generate-materials"),
   materialBatchStatus: document.querySelector("#material-batch-status"),
@@ -344,6 +346,7 @@ async function updateSelection(job, checkbox) {
     currentPage.summary.selected += intended ? 1 : -1;
     elements.selectedCount.textContent = currentPage.summary.selected;
     elements.generateMaterials.disabled = currentPage.summary.selected === 0;
+    elements.backfillSelected.disabled = currentPage.summary.selected === 0;
     setStatus(`${job.title} 已${intended ? "选择" : "取消选择"}。`);
   } catch (error) {
     checkbox.checked = !intended;
@@ -468,6 +471,30 @@ async function loadEvaluationProgress() {
   }
 }
 
+async function backfillEvaluations(scope) {
+  elements.backfillAll.disabled = true;
+  elements.backfillSelected.disabled = true;
+  setError();
+  try {
+    const response = await fetch(`/api/evaluation-backfill?scope=${scope}`, {
+      method: "POST",
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "无法补充评分任务。");
+    const message = payload.appended
+      ? `已补充 ${payload.appended} 个待评分职位。`
+      : "没有遗漏的未评分职位。";
+    elements.progressNote.textContent = message;
+    setStatus(message);
+    await loadEvaluationProgress();
+  } catch (error) {
+    setError(error.message);
+  } finally {
+    elements.backfillAll.disabled = false;
+    elements.backfillSelected.disabled = currentPage.summary.selected === 0;
+  }
+}
+
 function filtersChanged() {
   updateUrlFromFilters();
   loadJobs();
@@ -501,6 +528,14 @@ elements.dialog.addEventListener("close", () => {
 });
 elements.refreshResults.addEventListener("click", refreshDashboard);
 elements.generateMaterials.addEventListener("click", generateSelectedMaterials);
+elements.backfillAll.addEventListener(
+  "click",
+  () => backfillEvaluations("all"),
+);
+elements.backfillSelected.addEventListener(
+  "click",
+  () => backfillEvaluations("selected"),
+);
 
 filtersFromUrl();
 loadJobs();
