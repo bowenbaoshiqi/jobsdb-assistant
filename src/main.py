@@ -177,10 +177,22 @@ def workflow_evaluation_submit(
         EvaluationTaskStatus,
     )
 
+    progress_store = EvaluationProgressStore(
+        Path("workspace/dashboard/evaluation-progress.json")
+    )
     with suppress(KeyError):
-        EvaluationProgressStore(
-            Path("workspace/dashboard/evaluation-progress.json")
-        ).mark(task_id, EvaluationTaskStatus.COMPLETED)
+        progress_store.mark(task_id, EvaluationTaskStatus.COMPLETED)
+        if progress_store.get().status == "completed":
+            from src.storage.job_batch_repository import (
+                JobBatchRepository,
+            )
+
+            database = Database(get_config().storage.database_path)
+            current_batch = JobBatchRepository(database).current()
+            if current_batch is not None:
+                JobBatchRepository(database).mark_scored(
+                    current_batch.id
+                )
     _print_json({
         "status": "saved",
         "evaluation_id": evaluation.id,

@@ -58,6 +58,21 @@ def test_cannot_archive_again_while_discovery_is_running(tmp_path) -> None:
         repository.archive_and_create("AI Lead", now=NOW)
 
 
+def test_batch_can_be_marked_scored_after_evaluations_finish(
+    tmp_path,
+) -> None:
+    repository = JobBatchRepository(
+        Database(str(tmp_path / "jobs.db"))
+    )
+    batch = repository.create("AI Lead", now=NOW)
+    repository.mark_ready(batch.id)
+    repository.mark_scoring(batch.id)
+
+    repository.mark_scored(batch.id)
+
+    assert repository.current().status == "scored"
+
+
 def test_purge_expired_batch_removes_all_job_data(tmp_path) -> None:
     database = Database(str(tmp_path / "jobs.db"))
     _job(database, "old")

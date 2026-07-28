@@ -475,6 +475,8 @@ async function loadEvaluationProgress() {
 const batchStatusLabels = {
   discovering: "正在后台抓取",
   waiting_for_scoring: "抓取完成，等待评分",
+  scoring: "评分任务进行中",
+  scored: "本批评分已完成",
   ready: "本批已准备好",
   failed: "抓取失败",
 };

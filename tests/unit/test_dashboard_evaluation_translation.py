@@ -1,5 +1,7 @@
 from datetime import UTC, datetime
 
+import pytest
+
 from src.dashboard.evaluation_translation import (
     EvaluationTranslationCatalog,
     translate_evaluation,
@@ -108,3 +110,27 @@ def test_complete_evaluation_override_translates_historical_result() -> None:
     assert translated.dimensions[0].evidence == [
         "职位描述包含企业级 AI 平台"
     ]
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("Apply", "建议申请"),
+        ("Consider", "建议谨慎申请，并先确认关键条件"),
+        ("Skip", "不建议申请"),
+    ],
+)
+def test_translates_native_recommendation_aliases(
+    source: str,
+    expected: str,
+) -> None:
+    evaluation = _evaluation().model_copy(
+        update={"recommendation": source}
+    )
+
+    translated = translate_evaluation(
+        evaluation,
+        EvaluationTranslationCatalog(),
+    )
+
+    assert translated.recommendation == expected

@@ -20,8 +20,11 @@ DIMENSION_TITLES = {
 RECOMMENDATIONS = {
     "strong_apply": "强烈建议申请",
     "apply": "建议申请",
+    "Apply": "建议申请",
     "selective_apply": "建议谨慎申请，并先确认关键条件",
+    "Consider": "建议谨慎申请，并先确认关键条件",
     "do_not_apply": "不建议申请",
+    "Skip": "不建议申请",
 }
 
 _CHINESE = re.compile(r"[\u3400-\u9fff]")
