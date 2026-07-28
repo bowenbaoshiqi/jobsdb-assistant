@@ -84,12 +84,21 @@ class Orchestrator:
         self.consecutive_failures = 0
         self.detection_suspected = False
 
-    async def discover(self, keyword: str, limit: int = 50) -> dict:
+    async def discover(
+        self,
+        keyword: str,
+        limit: int = 50,
+        excluded_job_ids: set[str] | None = None,
+    ) -> dict:
         """Discover and persist JobsDB jobs without applying to them."""
         normalized_keyword = normalize_keyword(keyword)
         try:
             await self._init_browser()
-            return await self._discover_loaded(normalized_keyword, limit)
+            return await self._discover_loaded(
+                normalized_keyword,
+                limit,
+                excluded_job_ids=excluded_job_ids,
+            )
         except Exception:
             logger.exception("JobsDB discovery failed")
             return {
@@ -99,10 +108,19 @@ class Orchestrator:
         finally:
             await self._cleanup()
 
-    async def _discover_loaded(self, keyword: str, limit: int) -> dict:
+    async def _discover_loaded(
+        self,
+        keyword: str,
+        limit: int,
+        *,
+        excluded_job_ids: set[str] | None = None,
+    ) -> dict:
         """Run discovery after browser and login initialization."""
         await self.page_controller.goto(build_search_url(keyword))
-        jobs = await self.scraper.get_search_jobs(max_jobs=limit)
+        jobs = await self.scraper.get_search_jobs(
+            max_jobs=limit,
+            excluded_job_ids=excluded_job_ids,
+        )
         report = {
             "keyword": keyword,
             "found": len(jobs),

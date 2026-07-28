@@ -180,6 +180,7 @@ class HomepageScraper:
         self,
         max_jobs: int = 50,
         no_growth_limit: int = 2,
+        excluded_job_ids: set[str] | None = None,
     ) -> list[JobListing]:
         """Collect search results while bounded lazy loading makes progress."""
         if max_jobs < 1:
@@ -188,6 +189,7 @@ class HomepageScraper:
             raise ValueError("no_growth_limit must be at least 1")
 
         collected: dict[str, JobListing] = {}
+        excluded = excluded_job_ids or set()
         for _page_number in range(1, max_jobs + 1):
             stagnant_rounds = 0
             while (
@@ -197,6 +199,8 @@ class HomepageScraper:
                 before = len(collected)
                 job_data = await self.page.evaluate(EXTRACTION_SCRIPT) or []
                 for data in job_data:
+                    if data["id"] in excluded:
+                        continue
                     collected.setdefault(
                         data["id"],
                         self._to_listing(data),
