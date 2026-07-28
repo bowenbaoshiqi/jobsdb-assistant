@@ -53,7 +53,14 @@ class FakeBatchService:
         )
 
 
-def _client(tmp_path: Path, *, fact_warning: bool = False) -> TestClient:
+def _client(
+    tmp_path: Path,
+    *,
+    fact_warning: bool = False,
+    material_mode: MaterialMode = (
+        MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+    ),
+) -> TestClient:
     database = Database(":memory:")
     database.save_discovered_job(
         JobDetailCapture(
@@ -85,7 +92,10 @@ def _client(tmp_path: Path, *, fact_warning: bool = False) -> TestClient:
     version_root = material_root / "job-1" / "v1"
     version_root.mkdir(parents=True)
     pdf = version_root / "cv.pdf"
-    pdf.write_bytes(b"%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n")
+    if material_mode is not MaterialMode.COVER_LETTER_ONLY:
+        pdf.write_bytes(
+            b"%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n"
+        )
     cover = version_root / "cover-letter.txt"
     cover.write_text(" ".join(["word"] * 120), encoding="utf-8")
     import hashlib
@@ -98,9 +108,14 @@ def _client(tmp_path: Path, *, fact_warning: bool = False) -> TestClient:
             evaluation_id="evaluation-1",
             profile_version=1,
             version=1,
-            resume=MaterialArtifact(
-                path=str(pdf),
-                sha256=hashlib.sha256(pdf.read_bytes()).hexdigest(),
+            material_mode=material_mode,
+            resume=(
+                None
+                if material_mode is MaterialMode.COVER_LETTER_ONLY
+                else MaterialArtifact(
+                    path=str(pdf),
+                    sha256=hashlib.sha256(pdf.read_bytes()).hexdigest(),
+                )
             ),
             cover_letter=MaterialArtifact(
                 path=str(cover),
@@ -228,3 +243,20 @@ def test_material_batch_accepts_cover_letter_only_mode() -> None:
     assert response.json()["material_mode"] == (
         MaterialMode.COVER_LETTER_ONLY.value
     )
+
+
+def test_cover_letter_only_detail_has_no_resume_pdf(
+    tmp_path: Path,
+) -> None:
+    client = _client(
+        tmp_path,
+        material_mode=MaterialMode.COVER_LETTER_ONLY,
+    )
+
+    detail = client.get("/api/materials/package-1")
+    pdf = client.get("/api/materials/package-1/pdf")
+
+    assert detail.status_code == 200
+    assert detail.json()["material_mode"] == "cover_letter_only"
+    assert detail.json()["resume"] is None
+    assert pdf.status_code == 409

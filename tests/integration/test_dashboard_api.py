@@ -327,8 +327,10 @@ def test_page_contains_review_and_safe_action_controls(
     assert 'id="show-filter"' in html
     assert "使用默认简历直接投递" in html
     assert "打开职位并人工投递" in html
-    assert 'id="generate-materials"' in html
-    assert "为已选职位生成定制材料" in html
+    assert 'id="generate-cover-letters"' in html
+    assert 'id="generate-full-materials"' in html
+    assert "仅定制求职信" in html
+    assert "定制简历 + 求职信" in html
     assert 'id="apply-confirmation"' in html
     assert 'id="evaluation-progress"' in html
     assert 'id="refresh-results"' in html
@@ -351,6 +353,7 @@ def test_material_preview_page_is_simplified_chinese(
     assert response.status_code == 200
     assert '<html lang="zh-CN">' in response.text
     assert 'id="resume-preview"' in response.text
+    assert 'id="default-resume-notice"' in response.text
     assert 'id="cover-letter-preview"' in response.text
     assert "Reviewer 建议" in response.text
     assert "ATS 建议" in response.text
