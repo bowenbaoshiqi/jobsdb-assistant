@@ -23,12 +23,17 @@ from src.domain.job import CurrentSnapshotRecord
 from src.domain.material import (
     ApplicationPackage,
     MaterialArtifact,
+    MaterialCheck,
     MaterialReviewAction,
 )
 from src.materials.artifacts import (
     count_cover_letter_words,
+    hash_file,
     install_package_files,
 )
+from src.materials.pdf_renderer import render_tailored_resume
+from src.materials.pdf_validator import validate_tailored_pdf
+from src.materials.template import ResumeTemplate
 from src.storage.material_repository import MaterialRepository
 
 
@@ -219,14 +224,33 @@ class MaterialGenerationService:
         completed_at: datetime,
     ) -> ApplicationPackage:
         staging = self.checkpoints.staging_dir(task.task_id)
-        resume = self.checkpoints.resolve_staged_path(
-            task.task_id,
-            result.resume_path,
-        )
         cover = self.checkpoints.resolve_staged_path(
             task.task_id,
             result.cover_letter_path,
         )
+        source = Path(task.source_cv_path).resolve()
+        if not source.is_file() or hash_file(source) != task.source_cv_hash:
+            raise ValueError("source CV hash mismatch before rendering")
+        resume = staging / "cv.pdf"
+        template = ResumeTemplate.v5()
+        rendered = render_tailored_resume(
+            source,
+            resume,
+            result.tailored_sections,
+            template,
+        )
+        if rendered.overflow:
+            details = ", ".join(
+                f"{item.region}:{item.actual_lines}/{item.maximum_lines}"
+                for item in rendered.overflow
+            )
+            raise ValueError(f"resume layout overflow: {details}")
+        layout = validate_tailored_pdf(source, resume, template)
+        if not layout.passed:
+            raise ValueError(
+                "resume layout validation failed: "
+                + ", ".join(layout.codes)
+            )
         cover_text = cover.read_text(encoding="utf-8")
         if cover_text.strip() != result.cover_letter_text.strip():
             raise ValueError("cover letter artifact content mismatch")
@@ -245,6 +269,19 @@ class MaterialGenerationService:
             manifest={
                 "task_id": task.task_id,
                 "change_summary": result.change_summary,
+                "resume_template_id": task.resume_template_id,
+                "tailored_sections": result.tailored_sections.model_dump(
+                    mode="json"
+                ),
+                "layout": {
+                    "passed": layout.passed,
+                    "codes": list(layout.codes),
+                    "findings": list(layout.findings),
+                    "page_count": layout.page_count,
+                    "extractable_characters": (
+                        layout.extractable_characters
+                    ),
+                },
                 "engine_provenance": result.engine_provenance,
                 "prompt_provenance": result.prompt_provenance,
             },
@@ -267,5 +304,9 @@ class MaterialGenerationService:
             reviewer=result.reviewer,
             ats=result.ats,
             facts=result.facts,
+            layout=MaterialCheck(
+                passed=layout.passed,
+                findings=list(layout.findings),
+            ),
             created_at=completed_at,
         )

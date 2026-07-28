@@ -1,8 +1,8 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
-import pytest
 import fitz
+import pytest
 
 from src.adapters.application_material import ApplicationMaterialAdapter
 from src.adapters.career_ops_profile import CareerOpsProfileBundle
@@ -24,20 +24,37 @@ class Projector:
 
     def project(self, profile: CandidateProfile) -> CareerOpsProfileBundle:
         cv = self.root / "source-cv.pdf"
-        document = fitz.open()
-        first = document.new_page(width=595.2756, height=841.8898)
-        first.insert_text((41, 104), "PROFESSIONAL SUMMARY", fontsize=11)
-        first.insert_text((67, 125), "Original summary.", fontsize=9.6)
-        first.insert_text((41, 199), "CAREER HIGHLIGHTS", fontsize=11)
-        first.insert_text((58, 220), "Original highlights.", fontsize=9.6)
-        first.insert_text((41, 390), "CORE COMPETENCIES", fontsize=11)
-        first.insert_text((58, 411), "Original competencies.", fontsize=9.6)
-        first.insert_text((41, 502), "WORK EXPERIENCE", fontsize=11)
-        first.insert_text((58, 530), "Immutable work history.", fontsize=9.6)
-        second = document.new_page(width=595.2756, height=841.8898)
-        second.insert_text((41, 50), "Immutable education.", fontsize=11)
-        document.save(cv)
-        document.close()
+        if not cv.exists():
+            document = fitz.open()
+            first = document.new_page(width=595.2756, height=841.8898)
+            first.insert_text(
+                (41, 104),
+                "PROFESSIONAL SUMMARY",
+                fontsize=11,
+            )
+            first.insert_text((67, 125), "Original summary.", fontsize=9.6)
+            first.insert_text((41, 199), "CAREER HIGHLIGHTS", fontsize=11)
+            first.insert_text(
+                (58, 220),
+                "Original highlights.",
+                fontsize=9.6,
+            )
+            first.insert_text((41, 390), "CORE COMPETENCIES", fontsize=11)
+            first.insert_text(
+                (58, 411),
+                "Original competencies.",
+                fontsize=9.6,
+            )
+            first.insert_text((41, 502), "WORK EXPERIENCE", fontsize=11)
+            first.insert_text(
+                (58, 530),
+                "Immutable work history.",
+                fontsize=9.6,
+            )
+            second = document.new_page(width=595.2756, height=841.8898)
+            second.insert_text((41, 50), "Immutable education.", fontsize=11)
+            document.save(cv)
+            document.close()
         return CareerOpsProfileBundle(
             root=self.root,
             profile_id=profile.id,

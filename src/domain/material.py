@@ -64,6 +64,7 @@ class ApplicationPackage(BaseModel):
     reviewer: MaterialCheck = Field(default_factory=MaterialCheck)
     ats: MaterialCheck = Field(default_factory=MaterialCheck)
     facts: MaterialCheck = Field(default_factory=MaterialCheck)
+    layout: MaterialCheck = Field(default_factory=MaterialCheck)
     review_status: MaterialReviewStatus | None = None
     created_at: datetime | None = None
     # Compatibility fields retained until the v0.5 persistence migration.

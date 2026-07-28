@@ -12,6 +12,7 @@ from src.domain.candidate import CandidateProfile
 from src.domain.evaluation import JobEvaluation
 from src.domain.job import CurrentSnapshotRecord
 from src.domain.material import MaterialCheck
+from src.materials.template import ResumeTemplate, TailoredResumeSections
 
 _CAPABILITIES = [
     ".claude/skills/job-application-assistant/SKILL.md",
@@ -46,6 +47,13 @@ class ApplicationMaterialTask(BaseModel):
     material_version: int = Field(gt=0)
     source_cv_path: str
     source_cv_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    resume_template_id: Literal["bowen-v5"] = "bowen-v5"
+    tailored_section_names: tuple[str, str, str] = (
+        "professional_summary",
+        "career_highlights",
+        "core_competencies",
+    )
+    region_line_budgets: dict[str, int]
     feedback: str | None = None
 
 
@@ -63,8 +71,7 @@ class ApplicationMaterialResult(BaseModel):
     evaluation_id: str
     material_version: int = Field(gt=0)
     source_cv_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
-    tailored_cv_source: dict[str, Any]
-    resume_path: str = Field(min_length=1)
+    tailored_sections: TailoredResumeSections
     cover_letter_path: str = Field(min_length=1)
     cover_letter_text: str = Field(min_length=1)
     cover_letter_word_count: int = Field(ge=100, le=300)
@@ -130,6 +137,7 @@ class ApplicationMaterialAdapter:
         if not source_cv.is_file():
             raise ValueError("source CV does not exist")
         source_hash = hashlib.sha256(source_cv.read_bytes()).hexdigest()
+        template = ResumeTemplate.v5()
         return ApplicationMaterialTask(
             task_id=task_id,
             integration_commit=self.integration_commit,
@@ -156,6 +164,10 @@ class ApplicationMaterialAdapter:
             material_version=material_version,
             source_cv_path=str(source_cv),
             source_cv_hash=source_hash,
+            region_line_budgets={
+                region.name: region.maximum_lines
+                for region in template.regions
+            },
             feedback=feedback,
         )
 
