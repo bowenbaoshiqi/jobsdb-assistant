@@ -67,7 +67,10 @@ class LoginHandler:
         current_url = self.page.url
         if "about:blank" in current_url or not current_url.startswith("https://hk.jobsdb.com"):
             logger.info("Navigating to JobsDB homepage before login check...")
-            await self.page.goto(self.config.homepage_url, wait_until="networkidle")
+            await self.page.goto(
+                self.config.homepage_url,
+                wait_until="domcontentloaded",
+            )
             # SPA 需要额外时间渲染用户菜单
             await asyncio.sleep(5)
 
