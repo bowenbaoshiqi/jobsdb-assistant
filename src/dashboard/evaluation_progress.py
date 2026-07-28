@@ -74,27 +74,6 @@ class EvaluationProgressStore:
         self._write(updated)
         return updated
 
-    def append(
-        self,
-        task_ids: list[str],
-        *,
-        now: datetime,
-    ) -> tuple[EvaluationBatch | None, int]:
-        unique = list(dict.fromkeys(task_ids))
-        if not unique:
-            return self._read(), 0
-        batch = self._read()
-        if batch is None:
-            return self.start(unique, now=now), len(unique)
-        missing = [task_id for task_id in unique if task_id not in batch.tasks]
-        if not missing:
-            return batch, 0
-        tasks = dict(batch.tasks)
-        tasks.update(dict.fromkeys(missing, EvaluationTaskStatus.QUEUED))
-        updated = batch.model_copy(update={"tasks": tasks})
-        self._write(updated)
-        return updated, len(missing)
-
     def get(self) -> EvaluationProgress:
         batch = self._read()
         if batch is None:
