@@ -87,6 +87,9 @@ class TestPageControllerInterface:
     def test_has_check(self):
         assert inspect.iscoroutinefunction(PageController.check)
 
+    def test_has_set_input_files(self):
+        assert inspect.iscoroutinefunction(PageController.set_input_files)
+
     # 等待
     def test_has_wait_for_selector(self):
         assert inspect.iscoroutinefunction(PageController.wait_for_selector)

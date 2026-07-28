@@ -6,21 +6,42 @@ import time
 import urllib.request
 import webbrowser
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from pathlib import Path
 
 import uvicorn
 
-from config.settings import get_config
+from config.settings import AppConfig, get_config
 from src.accounts.registry import AccountRegistry
-from src.application.runtime import build_material_generation_service
+from src.application.approved_runtime import (
+    ApprovedApplicationRuntime,
+    LazyMaterialWizard,
+    LazyResumeManager,
+)
+from src.application.approved_worker import ApprovedApplicationWorker
+from src.application.execute_application import ApplicationExecutionService
+from src.application.job_batch_discovery import JobBatchDiscoveryService
+from src.application.job_batch_worker import JobBatchWorker
+from src.application.runtime import (
+    build_material_generation_service,
+    build_workflow,
+)
 from src.dashboard.app import DashboardDependencies, create_dashboard_app
 from src.dashboard.application_service import DashboardApplicationService
-from src.dashboard.evaluation_progress import EvaluationProgressStore
+from src.dashboard.evaluation_progress import (
+    EvaluationProgressStore,
+    EvaluationTaskStatus,
+)
 from src.dashboard.material_service import DashboardMaterialService
 from src.dashboard.query_service import DashboardQueryService
 from src.orchestrator import Orchestrator
+from src.storage.application_execution_repository import (
+    ApplicationExecutionRepository,
+)
 from src.storage.database import Database
+from src.storage.job_batch_repository import JobBatchRepository
+from src.storage.material_repository import MaterialRepository
 from src.storage.selection_repository import SelectionRepository
 
 LOOPBACK_HOST = "127.0.0.1"
@@ -143,15 +164,82 @@ def run_dashboard_doctor(
     return results
 
 
+def _headed_discovery_config(config: AppConfig) -> AppConfig:
+    discovery = config.model_copy(deep=True)
+    discovery.browser.headless = False
+    return discovery
+
+
 def build_production_app():
     """Wire Dashboard services to the existing local runtime."""
     config = get_config()
     database = Database(config.storage.database_path)
 
-    async def run_one(job_id: str) -> dict:
-        account = AccountRegistry().resolve_active(
-            allow_placeholder=(config.login.mode == "manual"),
+    account = AccountRegistry().resolve_active(
+        allow_placeholder=True,
+    )
+    if not account.email:
+        config.login.mode = "manual"
+    discovery_config = _headed_discovery_config(config)
+    database.set_account(account.alias)
+    job_batches = JobBatchRepository(database)
+    job_batches.purge_expired(
+        cutoff=datetime.now(UTC) - timedelta(days=30)
+    )
+
+    async def discover_batch(
+        keyword: str,
+        limit: int,
+        excluded_job_ids: set[str],
+    ) -> dict:
+        database.set_account(account.alias)
+        return await Orchestrator(
+            discovery_config,
+            account=account,
+            max_jobs=limit,
+        ).discover(
+            keyword,
+            limit=limit,
+            excluded_job_ids=excluded_job_ids,
         )
+
+    progress_store = EvaluationProgressStore(
+        Path("workspace/dashboard/evaluation-progress.json")
+    )
+
+    async def prepare_batch_scoring(
+        batch_id: str,
+        job_ids: list[str],
+    ) -> None:
+        workflow = build_workflow()
+        plan = workflow.prepare_evaluations(
+            batch_id,
+            job_ids=set(job_ids),
+        )
+        task_ids = [item.task.task_id for item in plan.pending]
+        cached_ids = [
+            f"cached-{item.id}"
+            for item in plan.cached
+        ]
+        progress_store.start(
+            task_ids + cached_ids,
+            now=datetime.now(UTC),
+        )
+        for task_id in cached_ids:
+            progress_store.mark(
+                task_id,
+                EvaluationTaskStatus.COMPLETED,
+            )
+
+    job_batch_worker = JobBatchWorker(
+        service=JobBatchDiscoveryService(
+            job_batches,
+            runner=discover_batch,
+            scoring_preparer=prepare_batch_scoring,
+        )
+    )
+
+    async def run_one(job_id: str) -> dict:
         database.set_account(account.alias)
         return await Orchestrator(
             config,
@@ -163,24 +251,54 @@ def build_production_app():
         database,
         runner=run_one,
     )
+    if config.login.mode == "manual" and hasattr(config, "browser"):
+        config.browser.headless = False
+    browser_runtime = ApprovedApplicationRuntime(
+        orchestrator=Orchestrator(config, account=account, max_jobs=1),
+        job_url=lambda job_id: _job_url(database, job_id),
+    )
+    approved_service = ApplicationExecutionService(
+        database=database,
+        materials=MaterialRepository(database),
+        executions=ApplicationExecutionRepository(database),
+        resume_manager=LazyResumeManager(browser_runtime),
+        wizard=LazyMaterialWizard(browser_runtime),
+    )
+    approved_worker = ApprovedApplicationWorker(
+        service=approved_service,
+        runtime=browser_runtime,
+    )
     material_generation = build_material_generation_service()
     return create_dashboard_app(
         DashboardDependencies(
             database=database,
-            query_service=DashboardQueryService(database),
+            query_service=DashboardQueryService(
+                database,
+                job_batch_repository=job_batches,
+            ),
             selection_repository=SelectionRepository(database),
             application_service=application_service,
-            evaluation_progress=EvaluationProgressStore(
-                Path("workspace/dashboard/evaluation-progress.json")
-            ),
+            evaluation_progress=progress_store,
             material_service=DashboardMaterialService(
                 database=database,
                 repository=material_generation.repository,
                 generation=material_generation,
                 materials_root=Path("workspace/materials"),
             ),
+            approved_application_service=approved_service,
+            approved_application_worker=approved_worker,
+            job_batch_repository=job_batches,
+            job_batch_worker=job_batch_worker,
+            account_alias=account.alias,
         )
     )
+
+
+def _job_url(database: Database, job_id: str) -> str:
+    snapshot = database.get_current_job_snapshot_record(job_id)
+    if snapshot is None:
+        raise KeyError(job_id)
+    return snapshot.canonical_url
 
 
 def _open_after_ready(url: str) -> None:

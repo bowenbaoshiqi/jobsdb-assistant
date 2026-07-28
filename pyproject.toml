@@ -36,6 +36,7 @@ dependencies = [
     "typer>=0.9.0",
     "python-dotenv>=1.0.0",
     "PyYAML>=6.0,<7",
+    "pymupdf>=1.26,<2",
 ]
 
 [project.optional-dependencies]

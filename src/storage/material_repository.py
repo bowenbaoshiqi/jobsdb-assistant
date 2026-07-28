@@ -361,7 +361,10 @@ class MaterialRepository:
                 action=action,
                 resulting_status=resulting,
                 feedback=feedback,
-                fact_warning_overridden=fact_warning_overridden,
+                fact_warning_overridden=(
+                    resulting
+                    is MaterialReviewStatus.APPROVED_WITH_FACT_OVERRIDE
+                ),
                 created_at=reviewed_at,
             )
             conn.execute(

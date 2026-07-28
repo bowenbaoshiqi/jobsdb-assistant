@@ -38,6 +38,31 @@ USER_AVATAR = '[data-automation="user-avatar"], [data-automation="account-menu"]
 USER_NAME = '[data-automation="user-name"], [data-automation="user-greeting"]'
 LOGOUT_BUTTON = 'a[href*="logout"], button:has-text("Log out")'
 
+# Profile resume management
+PROFILE_RESUME_SECTION = (
+    '[data-automation="resume-edit-link"]'
+)
+PROFILE_ADD_RESUME = (
+    'button[data-automation="resume-edit-link"]'
+)
+PROFILE_RESUME_FILE_INPUT = 'input[data-automation="resume-upload"]'
+PROFILE_RESUME_DEFAULT_CHECKBOX_CHECKED = (
+    'input#defaultResume[type="checkbox"]:checked'
+)
+PROFILE_RESUME_DONE = 'button[data-automation="manage-resume-done"]'
+PROFILE_FIRST_RESUME_OPTIONS = (
+    '[data-automation^="resume-item-"]'
+    ':not([data-automation="resume-item-list"]) '
+    'button[aria-label^="Options for "]'
+)
+PROFILE_RESUME_DELETE = (
+    'button[data-automation^="delete-resume-button-"]'
+)
+PROFILE_RESUME_DELETE_CONFIRM = (
+    '[role="dialog"] button:has-text("Delete"), '
+    '[role="dialog"] button:has-text("Remove")'
+)
+
 # 登录异常
 LOGIN_ERROR_MESSAGE = '[data-automation="login-error"], .error-message, [role="alert"]'
 REAUTH_REQUIRED = 'text=Please sign in again, text=Session expired'
@@ -62,7 +87,11 @@ JOB_CARD_LINK = 'a[href*="/job/"]'
 # 职位列表
 JOB_LIST_CONTAINER = '[data-automation="job-list"], [class*="job-list"]'
 LOAD_MORE_BUTTON = 'button:has-text("Load more"), [data-automation="load-more"]'
-NEXT_PAGE_BUTTON = 'a[rel="next"], button:has-text("Next")'
+NEXT_PAGE_BUTTON = (
+    'a[rel="next"], '
+    'nav[aria-label="Pagination of results"] a:has-text("Next"), '
+    'button:has-text("Next")'
+)
 
 # =============================================================================
 # 职位详情页

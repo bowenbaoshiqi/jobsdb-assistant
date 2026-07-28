@@ -185,6 +185,37 @@ def test_fact_warning_requires_explicit_override_and_review_is_audited() -> None
     assert repository.list_review_events("package-1") == [event]
 
 
+def test_clean_approval_ignores_unneeded_fact_override_request() -> None:
+    repository, snapshot_id = _repository()
+    repository.create_task(
+        task_id="task-1",
+        batch_id="batch-1",
+        job_id="job-1",
+        snapshot_id=snapshot_id,
+        profile_version=1,
+        evaluation_id="evaluation-1",
+        target_version=1,
+        payload={},
+        created_at=NOW,
+    )
+    repository.save_package(
+        task_id="task-1",
+        package=_package(1, facts_passed=True),
+        saved_at=NOW,
+    )
+
+    event = repository.record_review(
+        "package-1",
+        MaterialReviewAction.APPROVE,
+        fact_warning_overridden=True,
+        reviewed_at=NOW,
+    )
+
+    assert event.resulting_status is MaterialReviewStatus.APPROVED
+    assert event.fact_warning_overridden is False
+    assert repository.list_review_events("package-1") == [event]
+
+
 def test_reject_and_regenerate_preserve_old_package() -> None:
     repository, snapshot_id = _repository()
     repository.create_task(

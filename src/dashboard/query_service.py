@@ -18,12 +18,16 @@ from src.dashboard.schemas import (
 )
 from src.domain.candidate import CandidateProfile
 from src.domain.evaluation import JobEvaluation
+from src.storage.application_execution_repository import (
+    ApplicationExecutionRepository,
+)
 from src.storage.candidate_repository import CandidateRepository
 from src.storage.dashboard_application_repository import (
     DashboardApplicationRepository,
 )
 from src.storage.database import Database
 from src.storage.evaluation_repository import EvaluationRepository
+from src.storage.job_batch_repository import JobBatchRepository
 from src.storage.material_repository import MaterialRepository
 from src.storage.selection_repository import SelectionRepository
 
@@ -36,13 +40,16 @@ class DashboardQueryService:
         database: Database,
         *,
         translation_catalog: EvaluationTranslationCatalog | None = None,
+        job_batch_repository: JobBatchRepository | None = None,
     ) -> None:
         self.database = database
         self.profiles = CandidateRepository(database)
         self.evaluations = EvaluationRepository(database)
         self.selections = SelectionRepository(database)
         self.application_tasks = DashboardApplicationRepository(database)
+        self.approved_applications = ApplicationExecutionRepository(database)
         self.materials = MaterialRepository(database)
+        self.job_batches = job_batch_repository
         self.translation_catalog = (
             translation_catalog
             if translation_catalog is not None
@@ -53,10 +60,20 @@ class DashboardQueryService:
 
     def list_jobs(self, filters: DashboardFilters) -> DashboardPage:
         snapshots = self.database.list_current_snapshot_records()
+        if self.job_batches is not None:
+            current_job_ids = set(self.job_batches.current_job_ids())
+            snapshots = [
+                snapshot
+                for snapshot in snapshots
+                if snapshot.job_id in current_job_ids
+            ]
         profile = self.profiles.get_active()
         evaluations = self._current_evaluations(profile)
         selections = self.selections.list_selected()
         tasks = self.application_tasks.latest_for_jobs(
+            [snapshot.job_id for snapshot in snapshots]
+        )
+        approved_applications = self.approved_applications.latest_for_jobs(
             [snapshot.job_id for snapshot in snapshots]
         )
 
@@ -67,6 +84,9 @@ class DashboardQueryService:
                 profile=profile,
                 selection=selections.get(snapshot.job_id),
                 application_task=tasks.get(snapshot.job_id),
+                approved_application=approved_applications.get(
+                    snapshot.job_id
+                ),
             )
             for snapshot in snapshots
         ]
@@ -97,6 +117,7 @@ class DashboardQueryService:
         profile,
         selection,
         application_task,
+        approved_application,
     ) -> DashboardJob:
         listing = self.database.get_job(snapshot.job_id)
         material_package = self.materials.latest_for_job(snapshot.job_id)
@@ -106,6 +127,7 @@ class DashboardQueryService:
             else DashboardMaterialSummary(
                 package_id=material_package.id,
                 version=material_package.version,
+                material_mode=material_package.material_mode,
                 review_status=material_package.review_status,
                 task_status=None,
             )
@@ -138,6 +160,7 @@ class DashboardQueryService:
                 ),
                 application_task=application_task,
                 material=material_summary,
+                approved_application=approved_application,
             )
         evaluation = translate_evaluation(
             evaluation,
@@ -187,6 +210,7 @@ class DashboardQueryService:
             ),
             application_task=application_task,
             material=material_summary,
+            approved_application=approved_application,
         )
 
     @staticmethod

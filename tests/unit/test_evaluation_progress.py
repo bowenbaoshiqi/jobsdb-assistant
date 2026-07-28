@@ -43,3 +43,21 @@ def test_unknown_task_cannot_be_marked(tmp_path) -> None:
 
     with pytest.raises(KeyError, match="missing"):
         store.mark("missing", EvaluationTaskStatus.RUNNING)
+
+
+def test_claim_next_marks_first_queued_task_running(tmp_path) -> None:
+    store = EvaluationProgressStore(tmp_path / "progress.json")
+    store.start(["task-1", "task-2"], now=NOW)
+
+    assert store.claim_next() == "task-1"
+    progress = store.get()
+    assert progress.queued == 1
+    assert progress.running == 1
+
+
+def test_claim_next_returns_none_when_queue_is_drained(tmp_path) -> None:
+    store = EvaluationProgressStore(tmp_path / "progress.json")
+    store.start(["task-1"], now=NOW)
+    store.mark("task-1", EvaluationTaskStatus.COMPLETED)
+
+    assert store.claim_next() is None

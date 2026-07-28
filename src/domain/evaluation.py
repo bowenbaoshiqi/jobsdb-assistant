@@ -71,6 +71,7 @@ class EvaluationCacheKey(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
+    snapshot_id: str | None = None
     snapshot_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
     profile_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
     profile_bundle_hash: str = Field(pattern=r"^[a-f0-9]{64}$")

@@ -7,6 +7,7 @@ from src.domain.material import (
     ApplicationPackage,
     MaterialArtifact,
     MaterialCheck,
+    MaterialMode,
     MaterialReviewAction,
     MaterialReviewEvent,
     MaterialReviewStatus,
@@ -90,6 +91,34 @@ def test_fact_findings_default_package_to_warning_review() -> None:
 
 def test_clean_package_defaults_to_pending_review() -> None:
     assert package().review_status is MaterialReviewStatus.PENDING_REVIEW
+
+
+def test_legacy_package_defaults_to_full_material_mode() -> None:
+    assert package().material_mode is (
+        MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+    )
+
+
+def test_cover_letter_only_package_has_no_resume() -> None:
+    result = package(
+        material_mode=MaterialMode.COVER_LETTER_ONLY,
+        resume=None,
+    )
+
+    assert result.resume is None
+
+
+def test_full_material_package_requires_resume() -> None:
+    with pytest.raises(ValidationError, match="resume is required"):
+        package(resume=None)
+
+
+def test_cover_letter_only_package_rejects_resume() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="must not contain a resume",
+    ):
+        package(material_mode=MaterialMode.COVER_LETTER_ONLY)
 
 
 def test_material_artifact_requires_lowercase_sha256() -> None:

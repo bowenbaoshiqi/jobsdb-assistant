@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
+import fitz
 import pytest
 
 from src.adapters.application_material import ApplicationMaterialAdapter
@@ -8,6 +9,7 @@ from src.adapters.career_ops_profile import CareerOpsProfileBundle
 from src.domain.candidate import CandidateProfile
 from src.domain.evaluation import JobEvaluation, NativeDimension
 from src.domain.job import ApplyType, CurrentSnapshotRecord
+from src.domain.material import MaterialMode
 
 NOW = datetime(2026, 7, 27, tzinfo=UTC)
 PROFILE_HASH = "a" * 64
@@ -16,8 +18,12 @@ COMMIT = "c" * 40
 
 
 def _inputs(tmp_path: Path):
-    cv = tmp_path / "cv.md"
-    cv.write_text("# Bowen Bao\nEnterprise AI leader", encoding="utf-8")
+    cv = tmp_path / "cv.pdf"
+    document = fitz.open()
+    document.new_page(width=595.2756, height=841.8898)
+    document.new_page(width=595.2756, height=841.8898)
+    document.save(cv)
+    document.close()
     profile = CandidateProfile(
         id="candidate-1",
         version=2,
@@ -83,9 +89,13 @@ def _result(task) -> dict:
         "profile_hash": task.profile_hash,
         "evaluation_id": task.evaluation_id,
         "material_version": task.material_version,
+        "material_mode": task.material_mode,
         "source_cv_hash": task.source_cv_hash,
-        "tailored_cv_source": {"summary": "Enterprise AI leader"},
-        "resume_path": "staging/cv.pdf",
+        "tailored_sections": {
+            "professional_summary": "Enterprise AI leader",
+            "career_highlights": ["One", "Two", "Three", "Four"],
+            "core_competencies": ["Leadership", "Platforms", "Governance"],
+        },
         "cover_letter_path": "staging/cover-letter.txt",
         "cover_letter_text": " ".join(["word"] * 120),
         "cover_letter_word_count": 120,
@@ -125,6 +135,79 @@ def test_task_binds_all_immutable_inputs_and_language_contract(
     assert task.cover_letter_word_range == (100, 300)
     assert task.feedback == "Emphasise leadership"
     assert len(task.source_cv_hash) == 64
+    assert task.material_mode is (
+        MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+    )
+
+
+def test_cover_letter_only_mode_round_trips_through_result(
+    tmp_path: Path,
+) -> None:
+    profile, bundle, snapshot, evaluation = _inputs(tmp_path)
+    adapter = ApplicationMaterialAdapter(COMMIT, "application-material.v1")
+    task = adapter.build_task(
+        task_id="task-cover",
+        material_version=1,
+        material_mode=MaterialMode.COVER_LETTER_ONLY,
+        profile=profile,
+        bundle=bundle,
+        snapshot=snapshot,
+        evaluation=evaluation,
+    )
+    payload = _result(task)
+    payload.pop("tailored_sections")
+    result = adapter.validate_result(task, payload)
+
+    assert result.material_mode is MaterialMode.COVER_LETTER_ONLY
+    assert result.tailored_sections is None
+    assert task.tailored_section_names == ()
+    assert task.region_line_budgets == {}
+
+
+def test_result_rejects_material_mode_mismatch(tmp_path: Path) -> None:
+    profile, bundle, snapshot, evaluation = _inputs(tmp_path)
+    adapter = ApplicationMaterialAdapter(COMMIT, "application-material.v1")
+    task = adapter.build_task(
+        task_id="task-cover",
+        material_version=1,
+        material_mode=MaterialMode.COVER_LETTER_ONLY,
+        profile=profile,
+        bundle=bundle,
+        snapshot=snapshot,
+        evaluation=evaluation,
+    )
+    payload = _result(task)
+    payload["material_mode"] = "tailored_resume_and_cover_letter"
+
+    with pytest.raises(ValueError, match="material mode"):
+        adapter.validate_result(task, payload)
+
+
+def test_task_uses_configured_pdf_template_not_career_ops_markdown(
+    tmp_path: Path,
+) -> None:
+    profile, bundle, snapshot, evaluation = _inputs(tmp_path)
+    markdown = tmp_path / "cv.md"
+    markdown.write_text("# Career Ops CV", encoding="utf-8")
+    bundle = bundle.model_copy(update={"cv_path": markdown})
+    template = tmp_path / "resume-template.pdf"
+    template.write_bytes((tmp_path / "cv.pdf").read_bytes())
+    adapter = ApplicationMaterialAdapter(
+        COMMIT,
+        "application-material.v1",
+        resume_template_path=template,
+    )
+
+    task = adapter.build_task(
+        task_id="task-1",
+        material_version=1,
+        profile=profile,
+        bundle=bundle,
+        snapshot=snapshot,
+        evaluation=evaluation,
+    )
+
+    assert task.source_cv_path == str(template.resolve())
 
 
 @pytest.mark.parametrize(
@@ -162,7 +245,7 @@ def test_result_rejects_identity_mismatch(
         adapter.validate_result(task, payload)
 
 
-def test_result_requires_artifacts_word_limit_and_ordered_checks(
+def test_result_requires_structured_sections_word_limit_and_ordered_checks(
     tmp_path: Path,
 ) -> None:
     profile, bundle, snapshot, evaluation = _inputs(tmp_path)
@@ -178,9 +261,17 @@ def test_result_requires_artifacts_word_limit_and_ordered_checks(
     valid = _result(task)
     result = adapter.validate_result(task, valid)
     assert result.cover_letter_word_count == 120
+    assert len(result.tailored_sections.career_highlights) == 4
+    assert not hasattr(result, "resume_path")
 
     for mutation in (
-        {"resume_path": ""},
+        {
+            "tailored_sections": {
+                "professional_summary": "Summary",
+                "career_highlights": ["Only one"],
+                "core_competencies": ["One", "Two", "Three"],
+            }
+        },
         {"cover_letter_word_count": 99},
         {"check_order": ["facts", "reviewer", "ats"]},
     ):

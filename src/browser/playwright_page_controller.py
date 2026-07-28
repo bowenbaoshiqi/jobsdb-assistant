@@ -71,6 +71,9 @@ class PlaywrightPageController:
     async def check(self, selector: str) -> None:
         await self._page.check(selector)
 
+    async def set_input_files(self, selector: str, path: str) -> None:
+        await self._page.set_input_files(selector, path)
+
     # --- 等待 ---
     async def wait_for_selector(self, selector: str, timeout: float = 30.0) -> None:
         await self._page.wait_for_selector(selector, timeout=timeout * 1000)

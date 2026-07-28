@@ -18,6 +18,7 @@ from typing import Optional
 from loguru import logger
 
 from src.browser.ports.page_controller import PageController
+from src.jobsdb.apply.context import ApplicationMaterialContext
 from src.jobsdb.apply.detectors import (
     check_captcha,
     check_success,
@@ -65,36 +66,54 @@ _AUTOFILL_SELECTS_JS = r"""() => {
   return filled;
 }"""
 
-# 步骤 → handler 映射(v1.0 _handle_step 的 handlers dict 等价)
-_STEP_HANDLERS = {
-    ApplyStep.RESUME_SELECTION: ResumeStep(),
-    ApplyStep.QUESTIONS: QuestionsStep(),
-    ApplyStep.COVER_LETTER: CoverLetterStep(),
-    ApplyStep.REVIEW: ReviewStep(),
-}
-
-
-def default_handler_chain() -> list[StepHandler]:
+def default_handler_chain(
+    context: ApplicationMaterialContext | None = None,
+    *,
+    submit_confirmed: bool = True,
+) -> list[StepHandler]:
     """默认步骤处理器链(按优先级)"""
     return [
         SubmitStep(),       # SUBMITTED 检测优先
-        ResumeStep(),
+        ResumeStep(context),
         QuestionsStep(),
-        CoverLetterStep(),
-        ReviewStep(),
+        CoverLetterStep(context),
+        ReviewStep(context, allow_submit=submit_confirmed),
     ]
 
 
 class ApplyFlow:
     """申请流程处理器(v2.0 状态机骨架)"""
 
-    def __init__(self, page: PageController, human: Optional[HumanSimulator] = None,
-                 max_steps: int = 10,
-                 handlers: Optional[list[StepHandler]] = None):
+    def __init__(
+        self,
+        page: PageController,
+        human: Optional[HumanSimulator] = None,
+        max_steps: int = 10,
+        handlers: Optional[list[StepHandler]] = None,
+        material_context: ApplicationMaterialContext | None = None,
+        submit_confirmed: bool = False,
+    ):
         self.page = page
         self.human = human
         self.max_steps = max_steps
-        self.handlers = handlers or default_handler_chain()
+        self.material_context = material_context
+        self.submit_confirmed = submit_confirmed
+        material_submit = (
+            submit_confirmed if material_context is not None else True
+        )
+        self.handlers = handlers or default_handler_chain(
+            material_context,
+            submit_confirmed=material_submit,
+        )
+        self._step_handlers = {
+            ApplyStep.RESUME_SELECTION: ResumeStep(material_context),
+            ApplyStep.QUESTIONS: QuestionsStep(),
+            ApplyStep.COVER_LETTER: CoverLetterStep(material_context),
+            ApplyStep.REVIEW: ReviewStep(
+                material_context,
+                allow_submit=material_submit,
+            ),
+        }
         self.current_step: ApplyStep = ApplyStep.UNKNOWN
         self.step_count = 0
         self.start_time: Optional[float] = None
@@ -207,6 +226,15 @@ class ApplyFlow:
                         job_id=job_id,
                         error_message=f"Failed at step: {current.value}",
                     )
+                if (
+                    current is ApplyStep.REVIEW
+                    and self.material_context is not None
+                    and not self.submit_confirmed
+                ):
+                    return ApplyResult(
+                        status=ApplyStatus.READY_FOR_REVIEW,
+                        job_id=job_id,
+                    )
 
                 # 阶段转换等待
                 await asyncio.sleep(random.uniform(1.5, 3.0))
@@ -241,7 +269,7 @@ class ApplyFlow:
 
     async def _handle_step(self, step: ApplyStep) -> bool:
         """处理指定阶段(v1.0 _handle_step:委托给对应 handler)"""
-        handler = _STEP_HANDLERS.get(step)
+        handler = self._step_handlers.get(step)
         if handler:
             return await handler.handle(self.page, self.human)
         return False

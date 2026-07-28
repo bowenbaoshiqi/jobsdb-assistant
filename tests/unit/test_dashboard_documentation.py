@@ -12,8 +12,10 @@ def test_readme_documents_reproducible_local_dashboard() -> None:
     assert "JobsDB default CV" in readme
     assert "no cover letter" in readme
     assert "Ctrl+C" in readme
-    assert "v0.5.0" in readme
-    assert "为已选职位生成定制材料" in readme
+    assert "v0.6.0" in readme
+    assert "仅定制求职信" in readme
+    assert "定制简历 + 求职信" in readme
+    assert "不删除、上传或切换简历" in readme
     assert "100–300" in readme
     assert "Reviewer" in readme
     assert "ATS" in readme
@@ -21,9 +23,12 @@ def test_readme_documents_reproducible_local_dashboard() -> None:
     assert "批准" in readme
     assert "拒绝" in readme
     assert "重新生成" in readme
-    assert "v0.5 不会提交职位申请" in readme
+    assert "Professional Summary" in readme
+    assert "Career Highlights" in readme
+    assert "Core Competencies" in readme
+    assert "保留默认简历、删除其他非默认简历" in readme
+    assert "确认提交" in readme
     assert "workspace/materials/" in readme
-    assert "下一个版本" in readme
 
 
 def test_canonical_skill_starts_dashboard_without_auto_clicking() -> None:
@@ -37,6 +42,15 @@ def test_canonical_skill_starts_dashboard_without_auto_clicking() -> None:
     assert "must not click or call the Quick Apply endpoint" in instructions
     assert "JobsDB default CV" in instructions
     assert "no cover letter" in instructions
+    assert "Professional Summary" in instructions
+    assert "Career Highlights" in instructions
+    assert "Core Competencies" in instructions
+    assert "material_mode" in instructions
+    assert "cover_letter_only" in instructions
+    assert "tailored_resume_and_cover_letter" in instructions
+    assert "`material_mode` into the result unchanged" in instructions
+    assert "keeps the JobsDB default resume" in instructions
+    assert "must not confirm submission" in instructions
 
 
 def test_claude_skill_delegates_dashboard_rules() -> None:

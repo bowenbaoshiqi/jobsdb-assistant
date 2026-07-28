@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>JobsDB 求职助手</title>
     <link rel="stylesheet" href="/static/dashboard.css">
-    <script src="/static/dashboard.js" defer></script>
+    <script src="/static/dashboard.js?v=0.6.0-material-modes" defer></script>
   </head>
   <body>
     <main class="shell">
@@ -17,11 +17,26 @@
         <div class="selected-summary">
           <strong id="selected-count">0</strong>
           <span>个职位已选择</span>
-          <button id="generate-materials" type="button" class="primary" disabled>
-            为已选职位生成定制材料
+          <button id="generate-cover-letters" type="button" disabled>
+            仅定制求职信
+          </button>
+          <button id="generate-full-materials" type="button" class="primary" disabled>
+            定制简历 + 求职信
           </button>
         </div>
       </header>
+
+      <section class="batch-controls" aria-label="职位批次">
+        <label>
+          下一批搜索关键词
+          <input id="next-batch-keyword" type="search" autocomplete="off" placeholder="例如：AI Lead">
+        </label>
+        <button id="archive-and-discover" type="button" class="primary">
+          归档当前批次并抓取下一批
+        </button>
+        <button id="refresh-batch-status" type="button">刷新批次状态</button>
+        <span id="batch-status" class="muted">正在读取当前批次…</span>
+      </section>
 
       <section class="summary-grid" aria-label="职位汇总">
         <div><strong id="total-count">0</strong><span>职位总数</span></div>
@@ -111,7 +126,11 @@
       <template id="future-actions">
         <button>使用默认简历直接投递</button>
         <a>打开职位并人工投递</a>
-        <button>为已选职位生成定制材料</button>
+        <button>仅定制求职信</button>
+        <button>定制简历 + 求职信</button>
+        <button>使用已批准材料准备申请</button>
+        <button>确认并提交申请</button>
+        <button>下载定制简历并人工投递</button>
       </template>
     </main>
   </body>

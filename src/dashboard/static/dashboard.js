@@ -22,13 +22,23 @@ const elements = {
   progressCompleted: document.querySelector("#progress-completed"),
   progressFailed: document.querySelector("#progress-failed"),
   refreshResults: document.querySelector("#refresh-results"),
-  generateMaterials: document.querySelector("#generate-materials"),
+  generateCoverLetters: document.querySelector("#generate-cover-letters"),
+  generateFullMaterials: document.querySelector("#generate-full-materials"),
   materialBatchStatus: document.querySelector("#material-batch-status"),
   materialBatchNote: document.querySelector("#material-batch-note"),
+  nextBatchKeyword: document.querySelector("#next-batch-keyword"),
+  archiveAndDiscover: document.querySelector("#archive-and-discover"),
+  refreshBatchStatus: document.querySelector("#refresh-batch-status"),
+  batchStatus: document.querySelector("#batch-status"),
 };
 
 let currentPage = null;
 let pendingApplyJob = null;
+
+function setMaterialButtonsDisabled(disabled) {
+  elements.generateCoverLetters.disabled = disabled;
+  elements.generateFullMaterials.disabled = disabled;
+}
 
 function text(tag, value, className = "") {
   const node = document.createElement(tag);
@@ -174,12 +184,117 @@ function renderActions(job, checkbox) {
     const preview = text("a", `预览定制材料 v${job.material.version}`, "button-link primary");
     preview.href = `/materials/${encodeURIComponent(job.material.package_id)}`;
     actions.append(preview);
+    const approved = ["approved", "approved_with_fact_override"].includes(
+      job.material.review_status,
+    );
+    const execution = job.approved_application;
+    if (approved && job.apply_type === "quick_apply") {
+      if (execution?.status === "waiting_for_confirmation") {
+        const confirm = text("button", "确认并提交申请", "primary");
+        confirm.type = "button";
+        confirm.addEventListener("click", () => confirmApproved(execution, confirm));
+        actions.append(confirm);
+      } else if (execution?.status === "submitted") {
+        actions.append(text("span", "已使用批准材料投递", "material-state"));
+      } else if (execution?.status === "waiting_for_human") {
+        actions.append(text("span", "等待人工处理后继续", "material-state"));
+      } else if (!["queued", "preparing_resume", "submitting"].includes(execution?.status)) {
+        const prepare = text("button", "使用已批准材料准备申请", "primary");
+        prepare.type = "button";
+        prepare.addEventListener("click", () => prepareApproved(job, prepare));
+        actions.append(prepare);
+      } else {
+        actions.append(text("span", "申请任务处理中，请手动刷新查看状态", "material-state"));
+      }
+    }
+    if (approved && job.apply_type === "apply") {
+      const coverOnly = job.material.material_mode === "cover_letter_only";
+      const handoff = text(
+        "button",
+        coverOnly
+          ? "使用默认简历和求职信人工投递"
+          : "下载定制简历并人工投递",
+        "primary",
+      );
+      handoff.type = "button";
+      handoff.addEventListener("click", () => manualHandoff(job, handoff));
+      actions.append(handoff);
+    }
   } else if (job.selected) {
     actions.append(text("span", "等待生成定制材料", "material-state"));
   }
 
   checkbox.disabled = job.application_task?.status === "applying";
   return actions;
+}
+
+async function prepareApproved(job, button) {
+  button.disabled = true;
+  setError();
+  try {
+    const response = await fetch(
+      `/api/jobs/${encodeURIComponent(job.job_id)}/applications/prepare`,
+      { method: "POST" },
+    );
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "无法准备申请。");
+    job.approved_application = payload;
+    button.replaceWith(text("span", "申请任务已排队，请稍后手动刷新", "material-state"));
+    setStatus(`${job.title} 的定制材料申请任务已排队。`);
+  } catch (error) {
+    button.disabled = false;
+    setError(error.message);
+  }
+}
+
+async function confirmApproved(execution, button) {
+  button.disabled = true;
+  setError();
+  try {
+    const response = await fetch(
+      `/api/approved-applications/${encodeURIComponent(execution.id)}/confirm`,
+      { method: "POST" },
+    );
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "无法确认提交。");
+    button.replaceWith(text("span", "正在提交，请稍后手动刷新", "material-state"));
+    setStatus("已确认提交，Worker 正在执行最终投递。");
+  } catch (error) {
+    button.disabled = false;
+    setError(error.message);
+  }
+}
+
+async function manualHandoff(job, button) {
+  button.disabled = true;
+  const jobWindow = window.open("about:blank", "_blank", "noopener");
+  setError();
+  try {
+    const response = await fetch(
+      `/api/jobs/${encodeURIComponent(job.job_id)}/applications/manual-handoff`,
+      { method: "POST" },
+    );
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "无法准备人工投递材料。");
+    if (payload.resume_url) {
+      const download = document.createElement("a");
+      download.href = payload.resume_url;
+      download.download = "";
+      download.click();
+    }
+    await navigator.clipboard.writeText(payload.cover_letter_text);
+    if (jobWindow) jobWindow.location = payload.job_url;
+    setStatus(
+      payload.resume_url
+        ? "定制简历已下载，求职信已复制，并已打开 JobsDB 职位页。"
+        : "将使用 JobsDB 默认简历，求职信已复制，并已打开职位页。",
+    );
+  } catch (error) {
+    if (jobWindow) jobWindow.close();
+    setError(error.message);
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function renderJob(job) {
@@ -251,7 +366,7 @@ async function updateSelection(job, checkbox) {
     job.selection_status = intended ? "waiting_for_materials" : null;
     currentPage.summary.selected += intended ? 1 : -1;
     elements.selectedCount.textContent = currentPage.summary.selected;
-    elements.generateMaterials.disabled = currentPage.summary.selected === 0;
+    setMaterialButtonsDisabled(currentPage.summary.selected === 0);
     setStatus(`${job.title} 已${intended ? "选择" : "取消选择"}。`);
   } catch (error) {
     checkbox.checked = !intended;
@@ -319,7 +434,7 @@ async function loadJobs({ preserveContentOnError = false } = {}) {
     elements.evaluatedCount.textContent = currentPage.summary.evaluated;
     elements.pendingCount.textContent = currentPage.summary.pending;
     elements.selectedCount.textContent = currentPage.summary.selected;
-    elements.generateMaterials.disabled = currentPage.summary.selected === 0;
+    setMaterialButtonsDisabled(currentPage.summary.selected === 0);
     const cards = currentPage.jobs.map(renderJob);
     elements.list.replaceChildren(
       ...(cards.length ? cards : [text("p", "没有符合当前筛选条件的职位。", "muted")]),
@@ -330,24 +445,30 @@ async function loadJobs({ preserveContentOnError = false } = {}) {
   }
 }
 
-async function generateSelectedMaterials() {
-  elements.generateMaterials.disabled = true;
-  elements.generateMaterials.textContent = "正在创建任务…";
+async function generateSelectedMaterials(mode, button) {
+  const originalLabel = button.textContent;
+  setMaterialButtonsDisabled(true);
+  button.textContent = "正在创建任务…";
   setError();
   try {
-    const response = await fetch("/api/material-batches", { method: "POST" });
+    const response = await fetch("/api/material-batches", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ material_mode: mode }),
+    });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.detail || "无法创建材料生成任务。");
     elements.materialBatchStatus.hidden = false;
     elements.materialBatchNote.textContent =
-      `批次 ${payload.batch_id}：已创建 ${payload.tasks.length} 个独立职位任务。` +
+      `批次 ${payload.batch_id}：已创建 ${payload.tasks.length} 个独立职位任务（` +
+      `${mode === "cover_letter_only" ? "默认简历 + 定制求职信" : "定制简历 + 求职信"}）。` +
       "请保持当前 CC/Codex Agent 会话运行，完成后手动刷新页面。";
     setStatus(`已创建 ${payload.tasks.length} 个材料生成任务。`);
   } catch (error) {
     setError(error.message);
   } finally {
-    elements.generateMaterials.disabled = !currentPage?.summary.selected;
-    elements.generateMaterials.textContent = "为已选职位生成定制材料";
+    setMaterialButtonsDisabled(!currentPage?.summary.selected);
+    button.textContent = originalLabel;
   }
 }
 
@@ -373,6 +494,62 @@ async function loadEvaluationProgress() {
     }
   } catch {
     elements.progressStatus.textContent = "进度暂不可用";
+  }
+}
+
+const batchStatusLabels = {
+  discovering: "正在后台抓取",
+  waiting_for_scoring: "抓取完成，等待评分",
+  scoring: "评分任务进行中",
+  scored: "本批评分已完成",
+  ready: "本批已准备好",
+  failed: "抓取失败",
+};
+
+async function loadBatchStatus() {
+  elements.refreshBatchStatus.disabled = true;
+  try {
+    const response = await fetch("/api/job-batch");
+    if (!response.ok) throw new Error("无法读取批次状态");
+    const payload = await response.json();
+    if (!payload.batch) {
+      elements.batchStatus.textContent = "暂无当前批次";
+      return;
+    }
+    const label = batchStatusLabels[payload.batch.status] || payload.batch.status;
+    const error = payload.batch.error_message ? `：${payload.batch.error_message}` : "";
+    elements.batchStatus.textContent =
+      `${payload.batch.keyword} · ${label} · ${payload.job_count} 个职位${error}`;
+  } catch (error) {
+    elements.batchStatus.textContent = error.message;
+  } finally {
+    elements.refreshBatchStatus.disabled = false;
+  }
+}
+
+async function archiveAndDiscover() {
+  const keyword = elements.nextBatchKeyword.value.trim();
+  if (!keyword) {
+    setError("请输入下一批职位的搜索关键词。");
+    elements.nextBatchKeyword.focus();
+    return;
+  }
+  elements.archiveAndDiscover.disabled = true;
+  setError();
+  try {
+    const response = await fetch("/api/job-batches/next", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keyword }),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "无法启动下一批抓取");
+    await Promise.all([loadJobs(), loadBatchStatus()]);
+    setStatus("当前批次已归档，下一批正在后台抓取。");
+  } catch (error) {
+    setError(error.message);
+  } finally {
+    elements.archiveAndDiscover.disabled = false;
   }
 }
 
@@ -408,8 +585,26 @@ elements.dialog.addEventListener("close", () => {
   else pendingApplyJob = null;
 });
 elements.refreshResults.addEventListener("click", refreshDashboard);
-elements.generateMaterials.addEventListener("click", generateSelectedMaterials);
+elements.refreshBatchStatus.addEventListener("click", async () => {
+  await Promise.all([loadBatchStatus(), loadJobs({ preserveContentOnError: true })]);
+});
+elements.archiveAndDiscover.addEventListener("click", archiveAndDiscover);
+elements.generateCoverLetters.addEventListener(
+  "click",
+  () => generateSelectedMaterials(
+    "cover_letter_only",
+    elements.generateCoverLetters,
+  ),
+);
+elements.generateFullMaterials.addEventListener(
+  "click",
+  () => generateSelectedMaterials(
+    "tailored_resume_and_cover_letter",
+    elements.generateFullMaterials,
+  ),
+);
 
 filtersFromUrl();
 loadJobs();
 loadEvaluationProgress();
+loadBatchStatus();

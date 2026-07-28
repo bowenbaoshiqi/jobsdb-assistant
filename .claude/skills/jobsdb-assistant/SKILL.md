@@ -18,6 +18,7 @@ workflow profile-answers
 workflow profile-confirm
 discover --keyword
 workflow evaluation-prepare
+workflow evaluation-next
 workflow evaluation-submit
 workflow report
 workflow material-pending
@@ -44,6 +45,15 @@ native loading order
 `config/profile.yml → modes/_shared.md → modes/_profile.md → modes/oferta.md → cv.md`.
 Never recreate or edit the immutable private profile bundle.
 
+While the Dashboard is running, continuously poll `/api/job-batch`. When it
+reports `scoring`, run `workflow evaluation-next`, service the returned
+`task_path`, and submit it with `workflow evaluation-submit`. Repeat until
+`evaluation-next` returns `drained` and the batch reports `scored`. Do not
+wait for another user message between discovery and evaluation.
+While any current task is queued or running, the Agent MUST NOT send a final
+response or treat a claimed task as completed work; keep the same Agent turn
+active until the queue is drained or the batch fails.
+
 JobsDB discovery is public browser navigation and never uses credentials or
 login. Do not request password configuration during discovery.
 
@@ -59,5 +69,13 @@ skill. Process every `waiting_for_agent` task, submit each structured result
 through Python, continue other material tasks after an isolated failure, and
 use `workflow material-progress` after each result. Reviewer and ATS advice
 does not block the user's decision; factual claims must stay within the
-confirmed profile. v0.5 never applies to a job. Keep the Claude Code session
-active until all tasks are `generated` or `failed`.
+confirmed profile. Copy the task's `material_mode` into every result. For
+`cover_letter_only`, generate only the 100–300-word cover letter and omit
+`tailored_sections`. For `tailored_resume_and_cover_letter`, generate
+`Professional Summary`, exactly four `Career Highlights`, exactly three
+`Core Competencies`, and the cover letter; Python renders the fixed-template
+PDF.
+
+v0.6 application execution follows section 7 of the canonical skill. Keep the
+Claude Code session active with the Dashboard, but must not confirm submission
+or invoke prepare/confirm endpoints for the user.

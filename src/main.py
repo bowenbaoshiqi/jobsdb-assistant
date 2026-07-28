@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 from collections import Counter
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Optional
@@ -171,11 +172,50 @@ def workflow_evaluation_submit(
             payload,
         )
     )
+    from src.dashboard.evaluation_progress import (
+        EvaluationProgressStore,
+        EvaluationTaskStatus,
+    )
+
+    progress_store = EvaluationProgressStore(
+        Path("workspace/dashboard/evaluation-progress.json")
+    )
+    with suppress(KeyError):
+        progress_store.mark(task_id, EvaluationTaskStatus.COMPLETED)
+        if progress_store.get().status == "completed":
+            from src.storage.job_batch_repository import (
+                JobBatchRepository,
+            )
+
+            database = Database(get_config().storage.database_path)
+            current_batch = JobBatchRepository(database).current()
+            if current_batch is not None:
+                JobBatchRepository(database).mark_scored(
+                    current_batch.id
+                )
     _print_json({
         "status": "saved",
         "evaluation_id": evaluation.id,
         "snapshot_id": evaluation.job_snapshot_id,
         "overall_score": evaluation.overall_score,
+    })
+
+
+@workflow_app.command("evaluation-next")
+def workflow_evaluation_next() -> None:
+    """领取当前 Dashboard 批次的下一项评分任务。"""
+    from src.dashboard.evaluation_progress import EvaluationProgressStore
+
+    task_id = EvaluationProgressStore(
+        Path("workspace/dashboard/evaluation-progress.json")
+    ).claim_next()
+    if task_id is None:
+        _print_json({"status": "drained", "task_id": None})
+        return
+    _print_json({
+        "status": "claimed",
+        "task_id": task_id,
+        "task_path": f"workspace/ai-tasks/{task_id}/task.json",
     })
 
 

@@ -5,8 +5,13 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.domain.application_execution import ApplicationExecution
 from src.domain.job import ApplyType
-from src.domain.material import MaterialReviewStatus, MaterialTaskStatus
+from src.domain.material import (
+    MaterialMode,
+    MaterialReviewStatus,
+    MaterialTaskStatus,
+)
 from src.storage.dashboard_application_repository import (
     DashboardApplicationTask,
 )
@@ -17,6 +22,9 @@ class DashboardMaterialSummary(BaseModel):
 
     package_id: str | None = None
     version: int | None = None
+    material_mode: MaterialMode = (
+        MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+    )
     review_status: MaterialReviewStatus | None = None
     task_status: MaterialTaskStatus | None = None
 
@@ -93,6 +101,7 @@ class DashboardJob(BaseModel):
     selection_status: Literal["waiting_for_materials"] | None = None
     application_task: DashboardApplicationTask | None = None
     material: DashboardMaterialSummary | None = None
+    approved_application: ApplicationExecution | None = None
 
 
 class DashboardSummary(BaseModel):

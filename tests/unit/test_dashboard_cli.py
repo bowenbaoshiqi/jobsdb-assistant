@@ -4,12 +4,25 @@ from unittest.mock import MagicMock, Mock
 
 from typer.testing import CliRunner
 
+from config.settings import AppConfig
 from src.dashboard import cli
 from src.dashboard.cli import CheckState, run_dashboard_doctor
 from src.main import app
 from src.storage.database import Database
 
 runner = CliRunner()
+
+
+def test_discovery_config_is_headed_without_mutating_application_config() -> None:
+    config = AppConfig(_env_file=None)
+    config.browser.headless = True
+
+    discovery = cli._headed_discovery_config(config)
+
+    assert discovery is not config
+    assert discovery.browser is not config.browser
+    assert discovery.browser.headless is False
+    assert config.browser.headless is True
 
 
 def test_start_binds_only_loopback(monkeypatch) -> None:
@@ -125,17 +138,39 @@ def test_build_production_app_does_not_require_login(
     monkeypatch,
     tmp_path,
 ) -> None:
-    config = SimpleNamespace(
-        storage=SimpleNamespace(
-            database_path=str(tmp_path / "jobs.db"),
-        ),
-        login=SimpleNamespace(mode="manual"),
-    )
+    config = cli.get_config()
+    config.storage.database_path = str(tmp_path / "jobs.db")
+    config.login.mode = "manual"
     monkeypatch.setattr(cli, "get_config", lambda: config)
 
     dashboard = cli.build_production_app()
 
     assert dashboard.title == "JobsDB Assistant"
+    dependencies = dashboard.state.dashboard_dependencies
+    assert dependencies.approved_application_service is not None
+    assert dashboard.state.approved_application_worker is not None
+
+
+def test_build_production_app_falls_back_to_manual_login_without_account(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    config = cli.get_config()
+    config.storage.database_path = str(tmp_path / "jobs.db")
+    config.login.mode = "auto"
+    placeholder = SimpleNamespace(alias="default", email="", password="")
+    registry = MagicMock()
+    registry.resolve_active.return_value = placeholder
+    monkeypatch.setattr(cli, "get_config", lambda: config)
+    monkeypatch.setattr(cli, "AccountRegistry", Mock(return_value=registry))
+
+    dashboard = cli.build_production_app()
+
+    assert dashboard.title == "JobsDB Assistant"
+    assert config.login.mode == "manual"
+    registry.resolve_active.assert_called_once_with(
+        allow_placeholder=True,
+    )
 
 
 def test_start_with_browser_launches_readiness_thread(monkeypatch) -> None:

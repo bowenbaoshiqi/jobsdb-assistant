@@ -1,12 +1,13 @@
 # JobsDB Assistant
 
-当前开发版本：`v0.5.0`。新产品基于上游 JobsDB 自动投递引擎 v2.0
+当前开发版本：`v0.6.0`。新产品基于上游 JobsDB 自动投递引擎 v2.0
 构建；历史 `v2.0-phase*` 标签仅代表上游引擎的重构阶段。
 
-`v0.5.0` 在候选人画像、career-ops 原生 A–F 职位评分和本地 Dashboard
-之上，增加每个已选职位独立的英文定制简历 PDF 与英文求职信。材料可预览、
-批准、拒绝或重新生成；Reviewer 与 ATS 只提供建议，事实一致性警告必须由
-用户明确处理。v0.5 不会提交职位申请，批准后的材料留给下一个版本执行投递。
+`v0.6.0` 完成从职位选择、定制材料审核到申请执行的本地闭环。用户可以为每个
+职位只生成英文求职信并保留 JobsDB 默认简历，也可以生成独立英文简历和求职信。
+定制简历只替换固定 v5 模板的 `Professional Summary`、四条
+`Career Highlights` 和三项 `Core Competencies`，工作经历及后续内容保持
+不变。Quick Apply 必须由用户先准备、再确认提交；Apply 只做人工材料交接。
 
 所有候选人资料、JD、定制简历、求职信、cookies、浏览器 profile、SQLite、
 日志和截图只保存在本地忽略目录，CI 不上传任何运行时 artifact。
@@ -26,6 +27,11 @@ uv run jobsdb-assistant doctor
 
 依赖版本由 `uv.lock` 固定。其他电脑首次使用时，在仓库根目录执行以上相同命令，
 即可创建统一的项目 `.venv`；不要为 Dashboard 单独创建第二套环境。
+
+将唯一的两页 v5 简历 PDF 放在私有路径
+`workspace/resume-template-v5.pdf`。也可通过
+`JOBSDB_RESUME_TEMPLATE_PATH=/absolute/path/resume-v5.pdf` 指定其他位置。
+career-ops 的 `cv.md` 只作为评分上下文，不会被误当成 PDF 模板。
 
 ### 2. 发现职位（不会投递）
 
@@ -108,14 +114,16 @@ Dashboard 默认只显示已评分职位，也可切换到全部职位查看
 evidence、Profile/JD/engine 版本溯源；页面不会自行补造逐条 Profile
 判定。
 
-每个职位可立即勾选或取消，状态保存在本地 SQLite。选择一个或多个职位后，
-点击“为已选职位生成定制材料”，Python 会为每个职位创建独立任务：
+每个职位可立即勾选或取消，状态保存在本地 SQLite。选择一个或多个职位后，可
+点击以下任一入口，Python 会为每个职位创建独立任务：
 
-- **Quick Apply**：可以选择等待后续材料，也可以在明确确认后直接使用
+- **仅定制求职信**：生成 100–300 个英文单词的求职信，不生成 PDF；批准后
+  投递使用 JobsDB 当前默认简历，不删除、上传或切换简历。
+- **定制简历 + 求职信**：每个职位独立生成一份英文简历 PDF 和一封
+  100–300 个英文单词的求职信；选择五个职位会得到五套互不覆盖的材料。
+- **Quick Apply**：可以使用已批准的职位材料准备申请，也可以在明确确认后直接使用
   **JobsDB default CV**、**no cover letter** 投递当前单个职位。
 - **Apply**：只提供打开 JobsDB 职位详情的入口，由用户找到企业网站并人工投递。
-- **定制材料**：每个职位独立生成一份英文简历 PDF 和一封 100–300 个英文
-  单词的求职信；选择五个职位会得到五套互不覆盖的材料。
 
 当前 CC/Codex Agent 会话通过以下稳定 Python 协议逐个处理材料任务：
 
@@ -125,17 +133,28 @@ uv run python -m src.main workflow material-submit --task-id TASK_ID --result RE
 uv run python -m src.main workflow material-progress --batch-id BATCH_ID
 ```
 
-材料保存在私有的 `workspace/materials/<job-id>/v<version>/`。预览页展示 PDF、
-求职信、修改摘要、Reviewer 建议、ATS 建议和事实一致性检查：
+材料保存在私有的 `workspace/materials/<job-id>/v<version>/`。完整模式预览
+PDF；仅求职信模式明确显示将使用 JobsDB 默认简历。两种模式都展示求职信、
+修改摘要、Reviewer 建议、ATS 建议和事实一致性检查：
 
 - Reviewer 与 ATS 只展示建议，不阻塞批准。
 - 发现疑似虚构内容时材料仍保留，但标记为事实风险；用户可拒绝、重新生成，
   或勾选事实风险覆盖后批准。
 - 拒绝不会删除材料；重新生成会创建不可变的 N+1 版本并保留历史。
-- 只有用户批准的版本才标记为可供下一个版本执行投递。
+- 只有用户批准且版式完整的版本才可进入投递。
 
-v0.5 不会提交职位申请。Quick Apply 的定制材料自动投递，以及 Apply 的人工
-材料交接，均属于下一个版本。
+批准后，Quick Apply 显示“使用已批准材料准备申请”。前台 Worker 会串行执行：
+
+1. 完整模式保留默认简历、删除其他非默认简历，再上传并校验当前职位的定制 PDF；
+2. 仅求职信模式跳过全部远程简历管理操作，继续使用 JobsDB 默认简历；
+3. 根据模式选择定制简历或默认简历，并填写对应求职信；
+4. 停在 Review 页面，等待用户在 Dashboard 点击“确认提交”；
+5. 复用同一浏览器页面完成提交并记录结果。
+
+关闭 Dashboard 会安全停止 Worker。若提交临界阶段发生异常，状态会标记为
+“提交结果待确认”，不会盲目重复提交。Apply 职位在完整模式提供定制简历下载，
+仅求职信模式使用 JobsDB 默认简历；两者都会复制求职信并打开 JobsDB 详情页，
+由用户自行进入企业网站投递。
 
 直接 Quick Apply 复用原有浏览器状态机、登录态、频率限制和申请历史。同一时间
 只允许一个任务；验证码、登录失效或复杂表单会转为人工处理。点击前确认框会明确
@@ -208,6 +227,18 @@ uv run python scripts/privacy_guard.py
 - 拟人化鼠标（Bezier 曲线）+ 指纹伪装 + 会话持久化降低检测风险，但不保证零风控
 
 ## 📝 更新日志
+
+### v0.6.0 (2026-07-28) — Closed-loop Applications
+
+- 固定 v5 两页模板，仅定制 Summary、四条 Highlights 和三项 Competencies
+- Python 渲染 PDF，并硬性校验页数、冻结区域文本/坐标、文件大小和可提取文本
+- 持久化、可恢复且幂等的职位申请状态和审计事件
+- Quick Apply 串行替换远端简历、校验唯一文件名、填写英文求职信
+- 支持“仅定制求职信”和“定制简历 + 求职信”两个独立入口
+- 仅求职信模式保留 JobsDB 默认简历并跳过远程简历管理
+- “准备申请”和“确认提交”两阶段人工门禁，浏览器会话持续到最终结果
+- Apply 职位提供完整人工交接，不自动操作企业外部网站
+- 保留 v0.4 的默认 CV/no cover letter 快捷入口
 
 ### v0.5.0 (2026-07-27) — Tailored Materials
 

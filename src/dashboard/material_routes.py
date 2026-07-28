@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse
 
 from src.dashboard.material_schemas import (
     MaterialApprovalRequest,
+    MaterialBatchRequest,
     MaterialFeedbackRequest,
 )
 from src.dashboard.material_service import DashboardMaterialService
@@ -14,18 +15,20 @@ def material_router(service: DashboardMaterialService) -> APIRouter:
     router = APIRouter(prefix="/api")
 
     @router.post("/material-batches", status_code=202)
-    def create_batch():
+    def create_batch(request: MaterialBatchRequest):
         try:
-            plan = service.create_batch()
+            plan = service.create_batch(request.material_mode)
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return {
             "batch_id": plan.batch_id,
+            "material_mode": request.material_mode.value,
             "tasks": [
                 {
                     "task_id": item.task.task_id,
                     "job_id": item.task.job_id,
                     "material_version": item.task.material_version,
+                    "material_mode": item.task.material_mode.value,
                     "status": "waiting_for_agent",
                 }
                 for item in plan.pending
@@ -53,6 +56,22 @@ def material_router(service: DashboardMaterialService) -> APIRouter:
             path,
             media_type="application/pdf",
             filename="tailored-cv.pdf",
+            content_disposition_type="inline",
+        )
+
+    @router.get("/materials/{package_id}/pdf/download")
+    def download_pdf(package_id: str):
+        try:
+            path = service.pdf_path(package_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="material not found") from exc
+        except (ValueError, FileNotFoundError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return FileResponse(
+            path,
+            media_type="application/pdf",
+            filename="tailored-cv.pdf",
+            content_disposition_type="attachment",
         )
 
     @router.post("/materials/{package_id}/approve")
@@ -95,4 +114,3 @@ def material_router(service: DashboardMaterialService) -> APIRouter:
         }
 
     return router
-

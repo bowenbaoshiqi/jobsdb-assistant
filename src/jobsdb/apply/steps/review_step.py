@@ -6,10 +6,12 @@ v1.0 _handle_review_step 的逻辑:找提交按钮,点击,等待,确认成功。
 """
 
 import asyncio
+import json
 
 from loguru import logger
 
 from src.browser.ports.page_controller import PageController
+from src.jobsdb.apply.context import ApplicationMaterialContext
 from src.jobsdb.apply.detectors import check_success
 from src.jobsdb.selectors import (
     CONFIRM_SUBMIT_BUTTON,
@@ -18,8 +20,41 @@ from src.jobsdb.selectors import (
 )
 
 
+def _verify_review_js(context: ApplicationMaterialContext) -> str:
+    job_id = json.dumps(context.job_id)
+    filename = json.dumps(context.resume_filename)
+    require_resume = json.dumps(context.resume_filename is not None)
+    cover_excerpt = json.dumps(
+        " ".join(context.cover_letter_text.split())[:80]
+    )
+    return f"""() => {{
+      const normalize = value => (value || '').replace(/\\s+/g, ' ').trim();
+      const body = normalize(document.body?.innerText);
+      const values = Array.from(document.querySelectorAll('textarea'))
+        .map(item => normalize(item.value)).join(' ');
+      const job = {job_id};
+      const resume = {filename};
+      const requireResume = {require_resume};
+      const cover = {cover_excerpt};
+      return {{
+        job: location.href.includes(job) || body.includes(job),
+        resume: !requireResume || body.includes(resume),
+        cover_letter: body.includes(cover) || values.includes(cover)
+      }};
+    }}"""
+
+
 class ReviewStep:
     """REVIEW 步骤处理器(点击提交)"""
+
+    def __init__(
+        self,
+        context: ApplicationMaterialContext | None = None,
+        *,
+        allow_submit: bool = True,
+    ) -> None:
+        self.context = context
+        self.allow_submit = allow_submit
 
     async def detect(self, page: PageController) -> bool:
         # 由 detectors 判定(Submit 按钮可见 → REVIEW);最终提交按钮优先
@@ -37,6 +72,21 @@ class ReviewStep:
         "Review and submit" 步骤指示按钮(也是 type=submit)。
         """
         try:
+            if self.context is not None:
+                verified = await page.evaluate(
+                    _verify_review_js(self.context)
+                )
+                if not isinstance(verified, dict) or not all(
+                    verified.get(key) is True
+                    for key in ("job", "resume", "cover_letter")
+                ):
+                    logger.error(
+                        f"Approved material review mismatch: {verified!r}"
+                    )
+                    return False
+                if not self.allow_submit:
+                    return True
+
             # 找提交按钮(最终提交按钮优先)
             submit_btn = await page.query_selector(SUBMIT_APPLICATION_FINAL)
             if not submit_btn:

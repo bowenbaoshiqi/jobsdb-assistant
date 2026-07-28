@@ -1,13 +1,14 @@
 """HTTP routes for the local review Dashboard."""
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, field_validator
 
 from src.dashboard.application_service import (
     DirectApplyRequest,
@@ -18,10 +19,23 @@ from src.domain.job import ApplyType
 from src.storage.dashboard_application_repository import (
     ApplicationBusyError,
 )
+from src.storage.job_batch_repository import ActiveDiscoveryError
 
 _TEMPLATES = Jinja2Templates(
     directory=Path(__file__).with_name("templates")
 )
+
+
+class NextBatchRequest(BaseModel):
+    keyword: str
+
+    @field_validator("keyword")
+    @classmethod
+    def validate_keyword(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("keyword must not be empty")
+        return normalized
 
 
 def register_routes(app: FastAPI, dependencies) -> None:
@@ -54,7 +68,7 @@ def register_routes(app: FastAPI, dependencies) -> None:
         return {
             "status": "ok",
             "database": "ready",
-            "dashboard_version": "0.5.0",
+            "dashboard_version": "0.6.0",
         }
 
     @app.get("/api/jobs")
@@ -86,6 +100,46 @@ def register_routes(app: FastAPI, dependencies) -> None:
                 "failed": 0,
             }
         return dependencies.evaluation_progress.get()
+
+    @app.get("/api/job-batch")
+    async def current_job_batch():
+        repository = dependencies.job_batch_repository
+        if repository is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="job batch service is unavailable",
+            )
+        batch = repository.current()
+        if batch is None:
+            return {"batch": None, "job_count": 0}
+        return {
+            "batch": batch,
+            "job_count": len(repository.current_job_ids()),
+        }
+
+    @app.post(
+        "/api/job-batches/next",
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    async def archive_and_discover(payload: NextBatchRequest):
+        repository = dependencies.job_batch_repository
+        if repository is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="job batch service is unavailable",
+            )
+        now = datetime.now(UTC)
+        repository.purge_expired(cutoff=now - timedelta(days=30))
+        try:
+            return repository.archive_and_create(
+                payload.keyword,
+                now=now,
+            )
+        except ActiveDiscoveryError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
 
     @app.put("/api/selections/{job_id}")
     async def select(job_id: str):
@@ -153,3 +207,130 @@ def register_routes(app: FastAPI, dependencies) -> None:
                 detail="application task not found",
             )
         return task
+
+    @app.post(
+        "/api/jobs/{job_id}/applications/prepare",
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    async def prepare_approved_application(job_id: str):
+        service = dependencies.approved_application_service
+        if service is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="approved application worker is unavailable",
+            )
+        try:
+            return service.queue(
+                job_id,
+                account_alias=dependencies.account_alias,
+            )
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="job not found",
+            ) from exc
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
+
+    @app.post(
+        "/api/approved-applications/{execution_id}/confirm",
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    async def confirm_approved_application(execution_id: str):
+        service = dependencies.approved_application_service
+        if service is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="approved application worker is unavailable",
+            )
+        try:
+            return service.confirm_submission(execution_id)
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="application execution not found",
+            ) from exc
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
+
+    @app.get("/api/approved-applications/{execution_id}")
+    async def approved_application_status(execution_id: str):
+        service = dependencies.approved_application_service
+        if service is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="approved application worker is unavailable",
+            )
+        execution = service.get(execution_id)
+        if execution is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="application execution not found",
+            )
+        return execution
+
+    @app.post("/api/jobs/{job_id}/applications/manual-handoff")
+    async def manual_application_handoff(job_id: str):
+        service = dependencies.approved_application_service
+        if service is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="approved application worker is unavailable",
+            )
+        try:
+            handoff = service.manual_handoff(
+                job_id,
+                account_alias=dependencies.account_alias,
+            )
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="job not found",
+            ) from exc
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
+        return {
+            "execution_id": handoff.execution_id,
+            "job_url": handoff.job_url,
+            "resume_url": (
+                None
+                if handoff.resume_path is None
+                else f"/api/jobs/{job_id}/approved-resume"
+            ),
+            "cover_letter_text": handoff.cover_letter_text,
+        }
+
+    @app.get("/api/jobs/{job_id}/approved-resume")
+    async def approved_resume(job_id: str):
+        service = dependencies.material_service
+        if service is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="material service is unavailable",
+            )
+        try:
+            path = service.approved_pdf_for_job(job_id)
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="job not found",
+            ) from exc
+        except (ValueError, FileNotFoundError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
+        return FileResponse(
+            path,
+            media_type="application/pdf",
+            filename=f"tailored-resume-{job_id}.pdf",
+        )

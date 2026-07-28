@@ -12,6 +12,7 @@
 """
 
 import asyncio
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -67,6 +68,28 @@ class TestLoginConfigDefaults:
 # ═══════════════════════════════════════════════════════
 
 class TestManualModeAlreadyLoggedIn:
+    @pytest.mark.asyncio
+    async def test_initial_homepage_navigation_does_not_wait_for_network_idle(
+        self,
+        monkeypatch,
+    ):
+        page = AsyncMock()
+        page.url = "about:blank"
+        handler = _make_handler(page, mode="manual")
+        monkeypatch.setattr(
+            handler,
+            "_is_logged_in",
+            AsyncMock(return_value=True),
+        )
+
+        result = await handler.ensure_logged_in()
+
+        assert result is True
+        page.goto.assert_awaited_once_with(
+            handler.config.homepage_url,
+            wait_until="domcontentloaded",
+        )
+
     @pytest.mark.asyncio
     async def test_manual_mode_no_credentials_succeeds_when_logged_in(self):
         """manual + profile 已登录 → 返回 True,不要求凭证,不进轮询"""

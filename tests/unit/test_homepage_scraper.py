@@ -4,6 +4,7 @@ import pytest
 
 from src.browser.fake.fake_page import FakePageController
 from src.jobsdb.homepage import EXTRACTION_SCRIPT, HomepageScraper
+from src.jobsdb.selectors import NEXT_PAGE_BUTTON
 
 
 class AsyncNoOp:
@@ -129,6 +130,78 @@ async def test_search_scraper_stops_after_bounded_no_growth(
         if call.args == (EXTRACTION_SCRIPT,)
     ]
     assert len(extraction_calls) == 3
+
+
+@pytest.mark.asyncio
+async def test_search_scraper_uses_next_page_until_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("src.jobsdb.homepage.asyncio.sleep", AsyncNoOp())
+    page = FakePageController()
+    current_page = 1
+    first_page = [job_data(str(index)) for index in range(1, 31)]
+    second_page = [job_data(str(index)) for index in range(31, 61)]
+
+    async def evaluate(expression: str):
+        if expression == EXTRACTION_SCRIPT:
+            return first_page if current_page == 1 else second_page
+        return None
+
+    async def click(selector: str, timeout: float = 30.0) -> None:
+        nonlocal current_page
+        assert selector == NEXT_PAGE_BUTTON
+        current_page = 2
+
+    page.evaluate = AsyncMock(side_effect=evaluate)
+    page.is_visible = AsyncMock(
+        side_effect=lambda selector: (
+            selector == NEXT_PAGE_BUTTON and current_page == 1
+        )
+    )
+    page.click = AsyncMock(side_effect=click)
+    page.wait_for_load_state = AsyncMock()
+
+    jobs = await HomepageScraper(page).get_search_jobs(max_jobs=50)
+
+    assert len(jobs) == 50
+    assert [job.id for job in jobs] == [
+        str(index) for index in range(1, 51)
+    ]
+    page.click.assert_awaited_once_with(NEXT_PAGE_BUTTON)
+
+
+@pytest.mark.asyncio
+async def test_search_scraper_excludes_history_before_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("src.jobsdb.homepage.asyncio.sleep", AsyncNoOp())
+    page = FakePageController()
+    current_page = 1
+    first_page = [job_data(str(index)) for index in range(1, 31)]
+    second_page = [job_data(str(index)) for index in range(31, 61)]
+
+    async def evaluate(expression: str):
+        if expression == EXTRACTION_SCRIPT:
+            return first_page if current_page == 1 else second_page
+        return None
+
+    async def click(_selector: str, timeout: float = 30.0) -> None:
+        nonlocal current_page
+        current_page = 2
+
+    page.evaluate = AsyncMock(side_effect=evaluate)
+    page.is_visible = AsyncMock(return_value=True)
+    page.click = AsyncMock(side_effect=click)
+    page.wait_for_load_state = AsyncMock()
+
+    jobs = await HomepageScraper(page).get_search_jobs(
+        max_jobs=15,
+        excluded_job_ids={str(index) for index in range(1, 46)},
+    )
+
+    assert [job.id for job in jobs] == [
+        str(index) for index in range(46, 61)
+    ]
 
 
 @pytest.mark.asyncio

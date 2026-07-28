@@ -6,6 +6,8 @@ const elements = {
   error: document.querySelector("#material-error"),
   message: document.querySelector("#material-message"),
   resume: document.querySelector("#resume-preview"),
+  resumePanel: document.querySelector("#resume-panel"),
+  defaultResumeNotice: document.querySelector("#default-resume-notice"),
   download: document.querySelector("#resume-download"),
   cover: document.querySelector("#cover-letter-preview"),
   count: document.querySelector("#cover-letter-count"),
@@ -46,9 +48,17 @@ function render(payload) {
   elements.meta.textContent =
     `画像 v${payload.profile_version} · 评分记录 ${payload.evaluation_id}`;
   elements.status.textContent = payload.review_status;
-  const pdfUrl = `/api/materials/${encodeURIComponent(packageId)}/pdf`;
-  elements.resume.src = pdfUrl;
-  elements.download.href = pdfUrl;
+  const coverOnly = payload.material_mode === "cover_letter_only";
+  elements.resumePanel.hidden = coverOnly;
+  elements.defaultResumeNotice.hidden = !coverOnly;
+  if (coverOnly) {
+    elements.resume.removeAttribute("src");
+    elements.download.removeAttribute("href");
+  } else {
+    const pdfUrl = `/api/materials/${encodeURIComponent(packageId)}/pdf`;
+    elements.resume.src = pdfUrl;
+    elements.download.href = `${pdfUrl}/download`;
+  }
   elements.cover.textContent = payload.cover_letter_text;
   elements.count.textContent = `${payload.cover_letter_word_count} 个英文单词`;
   fillList(elements.reviewer, payload.reviewer.findings);

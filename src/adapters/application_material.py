@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -11,7 +12,8 @@ from src.adapters.career_ops_profile import CareerOpsProfileBundle
 from src.domain.candidate import CandidateProfile
 from src.domain.evaluation import JobEvaluation
 from src.domain.job import CurrentSnapshotRecord
-from src.domain.material import MaterialCheck
+from src.domain.material import MaterialCheck, MaterialMode
+from src.materials.template import ResumeTemplate, TailoredResumeSections
 
 _CAPABILITIES = [
     ".claude/skills/job-application-assistant/SKILL.md",
@@ -44,8 +46,18 @@ class ApplicationMaterialTask(BaseModel):
     evaluation_id: str
     evaluation: JobEvaluation
     material_version: int = Field(gt=0)
+    material_mode: MaterialMode = (
+        MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+    )
     source_cv_path: str
     source_cv_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    resume_template_id: Literal["bowen-v5"] = "bowen-v5"
+    tailored_section_names: tuple[str, ...] = (
+        "professional_summary",
+        "career_highlights",
+        "core_competencies",
+    )
+    region_line_budgets: dict[str, int]
     feedback: str | None = None
 
 
@@ -62,9 +74,11 @@ class ApplicationMaterialResult(BaseModel):
     profile_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
     evaluation_id: str
     material_version: int = Field(gt=0)
+    material_mode: MaterialMode = (
+        MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+    )
     source_cv_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
-    tailored_cv_source: dict[str, Any]
-    resume_path: str = Field(min_length=1)
+    tailored_sections: TailoredResumeSections | None = None
     cover_letter_path: str = Field(min_length=1)
     cover_letter_text: str = Field(min_length=1)
     cover_letter_word_count: int = Field(ge=100, le=300)
@@ -78,6 +92,18 @@ class ApplicationMaterialResult(BaseModel):
 
     @model_validator(mode="after")
     def validate_generated_content(self) -> ApplicationMaterialResult:
+        full = (
+            self.material_mode
+            is MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+        )
+        if full and self.tailored_sections is None:
+            raise ValueError(
+                "tailored sections are required for full material mode"
+            )
+        if not full and self.tailored_sections is not None:
+            raise ValueError(
+                "cover-letter-only result must not contain tailored sections"
+            )
         if self.check_order != ["reviewer", "ats", "facts"]:
             raise ValueError("checks must be ordered reviewer, ats, facts")
         actual_words = len(self.cover_letter_text.split())
@@ -91,15 +117,24 @@ class ApplicationMaterialAdapter:
         self,
         integration_commit: str,
         contract_version: str,
+        resume_template_path: Path | None = None,
     ) -> None:
         self.integration_commit = integration_commit
         self.contract_version = contract_version
+        self.resume_template_path = (
+            None
+            if resume_template_path is None
+            else resume_template_path.expanduser().resolve()
+        )
 
     def build_task(
         self,
         *,
         task_id: str,
         material_version: int,
+        material_mode: MaterialMode = (
+            MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+        ),
         profile: CandidateProfile,
         bundle: CareerOpsProfileBundle,
         snapshot: CurrentSnapshotRecord,
@@ -126,10 +161,17 @@ class ApplicationMaterialAdapter:
             raise ValueError("evaluation profile identity mismatch")
         if not evaluation.id:
             raise ValueError("evaluation id is required")
-        source_cv = bundle.cv_path
-        if not source_cv.is_file():
-            raise ValueError("source CV does not exist")
+        source_cv = self.resume_template_path or bundle.cv_path.resolve()
+        if (
+            not source_cv.is_file()
+            or source_cv.suffix.casefold() != ".pdf"
+            or source_cv.read_bytes()[:5] != b"%PDF-"
+        ):
+            raise ValueError(
+                "fixed v5 resume template PDF does not exist"
+            )
         source_hash = hashlib.sha256(source_cv.read_bytes()).hexdigest()
+        template = ResumeTemplate.v5()
         return ApplicationMaterialTask(
             task_id=task_id,
             integration_commit=self.integration_commit,
@@ -154,8 +196,26 @@ class ApplicationMaterialAdapter:
             evaluation_id=evaluation.id,
             evaluation=evaluation,
             material_version=material_version,
+            material_mode=material_mode,
             source_cv_path=str(source_cv),
             source_cv_hash=source_hash,
+            tailored_section_names=(
+                (
+                    "professional_summary",
+                    "career_highlights",
+                    "core_competencies",
+                )
+                if material_mode
+                is MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+                else ()
+            ),
+            region_line_budgets={
+                region.name: region.maximum_lines
+                for region in template.regions
+            }
+            if material_mode
+            is MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+            else {},
             feedback=feedback,
         )
 
@@ -189,6 +249,11 @@ class ApplicationMaterialAdapter:
                 "material version",
                 result.material_version,
                 task.material_version,
+            ),
+            (
+                "material mode",
+                result.material_mode,
+                task.material_mode,
             ),
             ("source CV hash", result.source_cv_hash, task.source_cv_hash),
         ]

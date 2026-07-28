@@ -1,4 +1,5 @@
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -178,6 +179,36 @@ def test_evaluation_prepare_prints_pending_task_ids(monkeypatch) -> None:
             "snapshot_id": "1",
             "task_id": "evaluation-task-1",
         }],
+    }
+
+
+def test_evaluation_next_claims_one_dashboard_task(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    progress_path = Path(
+        "workspace/dashboard/evaluation-progress.json"
+    )
+    from src.dashboard.evaluation_progress import EvaluationProgressStore
+
+    EvaluationProgressStore(progress_path).start(
+        ["evaluation-task-1", "evaluation-task-2"],
+        now=datetime(2026, 7, 28, tzinfo=UTC),
+    )
+
+    result = runner.invoke(app, [
+        "workflow",
+        "evaluation-next",
+    ])
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == {
+        "status": "claimed",
+        "task_id": "evaluation-task-1",
+        "task_path": (
+            "workspace/ai-tasks/evaluation-task-1/task.json"
+        ),
     }
 
 
