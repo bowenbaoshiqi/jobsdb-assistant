@@ -12,7 +12,7 @@ from pathlib import Path
 
 import uvicorn
 
-from config.settings import get_config
+from config.settings import AppConfig, get_config
 from src.accounts.registry import AccountRegistry
 from src.application.approved_runtime import (
     ApprovedApplicationRuntime,
@@ -164,6 +164,12 @@ def run_dashboard_doctor(
     return results
 
 
+def _headless_discovery_config(config: AppConfig) -> AppConfig:
+    discovery = config.model_copy(deep=True)
+    discovery.browser.headless = True
+    return discovery
+
+
 def build_production_app():
     """Wire Dashboard services to the existing local runtime."""
     config = get_config()
@@ -174,6 +180,7 @@ def build_production_app():
     )
     if not account.email:
         config.login.mode = "manual"
+    discovery_config = _headless_discovery_config(config)
     database.set_account(account.alias)
     job_batches = JobBatchRepository(database)
     job_batches.purge_expired(
@@ -187,7 +194,7 @@ def build_production_app():
     ) -> dict:
         database.set_account(account.alias)
         return await Orchestrator(
-            config,
+            discovery_config,
             account=account,
             max_jobs=limit,
         ).discover(
