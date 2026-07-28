@@ -41,7 +41,7 @@ def test_database_upgrades_v04_state_to_v05_without_data_loss(
             "SELECT id, title FROM jobs WHERE id = 'job-1'"
         ).fetchone()
 
-    assert versions[-1] == (5,)
+    assert versions[-1] == (6,)
     assert versions.count((5,)) == 1
     assert selected == [("job-1", "waiting_for_materials")]
     assert job == ("job-1", "Head of AI")

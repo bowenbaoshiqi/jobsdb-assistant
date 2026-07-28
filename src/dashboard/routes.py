@@ -54,7 +54,7 @@ def register_routes(app: FastAPI, dependencies) -> None:
         return {
             "status": "ok",
             "database": "ready",
-            "dashboard_version": "0.5.0",
+            "dashboard_version": "0.6.0",
         }
 
     @app.get("/api/jobs")

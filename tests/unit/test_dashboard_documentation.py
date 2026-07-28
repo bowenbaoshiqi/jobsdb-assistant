@@ -12,7 +12,7 @@ def test_readme_documents_reproducible_local_dashboard() -> None:
     assert "JobsDB default CV" in readme
     assert "no cover letter" in readme
     assert "Ctrl+C" in readme
-    assert "v0.5.0" in readme
+    assert "v0.6.0" in readme
     assert "为已选职位生成定制材料" in readme
     assert "100–300" in readme
     assert "Reviewer" in readme
@@ -21,9 +21,12 @@ def test_readme_documents_reproducible_local_dashboard() -> None:
     assert "批准" in readme
     assert "拒绝" in readme
     assert "重新生成" in readme
-    assert "v0.5 不会提交职位申请" in readme
+    assert "Professional Summary" in readme
+    assert "Career Highlights" in readme
+    assert "Core Competencies" in readme
+    assert "删除 JobsDB 中已有的全部简历" in readme
+    assert "确认提交" in readme
     assert "workspace/materials/" in readme
-    assert "下一个版本" in readme
 
 
 def test_canonical_skill_starts_dashboard_without_auto_clicking() -> None:
@@ -37,6 +40,10 @@ def test_canonical_skill_starts_dashboard_without_auto_clicking() -> None:
     assert "must not click or call the Quick Apply endpoint" in instructions
     assert "JobsDB default CV" in instructions
     assert "no cover letter" in instructions
+    assert "Professional Summary" in instructions
+    assert "Career Highlights" in instructions
+    assert "Core Competencies" in instructions
+    assert "must not confirm submission" in instructions
 
 
 def test_claude_skill_delegates_dashboard_rules() -> None:

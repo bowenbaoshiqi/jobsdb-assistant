@@ -24,7 +24,7 @@ def test_skill_uses_python_as_state_authority(path: Path) -> None:
     assert "workflow material-submit" in text
     assert "workflow material-progress" in text
     assert "Python and SQLite are the state authority" in text
-    assert "v0.5 never applies" in text
+    assert "v0.6 application execution" in text
     assert "API key" not in text
     assert "continue other material tasks" in text
     assert "waiting_for_agent" in text
@@ -33,10 +33,10 @@ def test_skill_uses_python_as_state_authority(path: Path) -> None:
     assert "claude -p" not in text
 
 
-def test_canonical_skill_never_runs_application_execution() -> None:
+def test_canonical_skill_never_confirms_application_for_user() -> None:
     text = Path(
         ".agents/skills/jobsdb-assistant/SKILL.md"
     ).read_text(encoding="utf-8")
 
     assert "python -m src.main start" not in text
-    assert "Quick Apply submission" not in text
+    assert "must not confirm submission" in text
