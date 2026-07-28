@@ -345,6 +345,10 @@ def test_page_contains_review_and_safe_action_controls(
     assert 'id="evaluation-progress"' in html
     assert 'id="refresh-results"' in html
     assert "刷新评分结果" in html
+    assert 'id="backfill-all-evaluations"' in html
+    assert "补充全部未评分职位" in html
+    assert 'id="backfill-selected-evaluations"' in html
+    assert "补充已选未评分职位" in html
     assert "使用已批准材料准备申请" in html
     assert "确认并提交申请" in html
     assert "下载定制简历并人工投递" in html
@@ -377,3 +381,8 @@ def test_dashboard_javascript_does_not_schedule_automatic_refresh(
     javascript = client.get("/static/dashboard.js").text
 
     assert "setInterval" not in javascript
+    assert "/api/evaluation-backfill?scope=" in javascript
+    assert (
+        "backfillSelected.disabled = currentPage.summary.selected === 0"
+        in javascript
+    )
