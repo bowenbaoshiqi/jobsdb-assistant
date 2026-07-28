@@ -192,17 +192,29 @@ discovery and automatically creates evaluation tasks scoped to the new
    `failed`. Do not rerun discovery and do not call the global
    `workflow evaluation-prepare` command.
 2. When status is `scoring`, read
-   `workspace/dashboard/evaluation-progress.json`. Service only task IDs in
-   its current `tasks` map whose status is `queued`; never scan every
-   historical `workspace/ai-tasks` directory.
+   the next current task through Python:
+   `uv run python -m src.main workflow evaluation-next`.
+   When it returns `claimed`, immediately service its `task_path`; this
+   durable claim changes the Dashboard state from queued to running. Never
+   scan every historical `workspace/ai-tasks` directory. Python owns the
+   current task map in `workspace/dashboard/evaluation-progress.json` and
+   claims only tasks whose status is `queued`.
 3. For each current task, follow Section 3's Career Ops loading order,
    produce one schema-valid A-F result, and submit it through
    `workflow evaluation-submit`.
 4. Continue after an individual validation failure and report its task ID.
    Python updates Dashboard progress after every successful submission.
-5. Stop the scoring loop only when `/api/evaluation-progress` reports no
+5. Call `workflow evaluation-next` again after every submission. Stop the
+   scoring loop only when it returns `drained`,
+   `/api/evaluation-progress` reports no
    queued or running tasks and `/api/job-batch` reports `scored`, or when the
    batch reports `failed`.
+
+This is a hard completion gate: while any current task is queued or running,
+the Agent MUST NOT send a final response, describe a claimed task as
+completed work, or wait for another user message. Continue the claim,
+evaluate, submit loop in the same Agent turn. A concise commentary progress
+update is allowed, but it does not end the turn.
 
 Dashboard HTTP requests are state observation only. They do not authorize
 job selection, material approval, Quick Apply preparation, or submission.

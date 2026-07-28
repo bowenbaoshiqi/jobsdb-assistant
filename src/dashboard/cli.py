@@ -164,9 +164,9 @@ def run_dashboard_doctor(
     return results
 
 
-def _headless_discovery_config(config: AppConfig) -> AppConfig:
+def _headed_discovery_config(config: AppConfig) -> AppConfig:
     discovery = config.model_copy(deep=True)
-    discovery.browser.headless = True
+    discovery.browser.headless = False
     return discovery
 
 
@@ -180,7 +180,7 @@ def build_production_app():
     )
     if not account.email:
         config.login.mode = "manual"
-    discovery_config = _headless_discovery_config(config)
+    discovery_config = _headed_discovery_config(config)
     database.set_account(account.alias)
     job_batches = JobBatchRepository(database)
     job_batches.purge_expired(

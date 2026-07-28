@@ -71,6 +71,7 @@ class EvaluationService:
         if profile.content_hash is None:
             raise ValueError("confirmed profile hash is required")
         return EvaluationCacheKey(
+            snapshot_id=snapshot.snapshot_id,
             snapshot_hash=snapshot.content_hash,
             profile_hash=profile.content_hash,
             profile_bundle_hash=bundle.bundle_hash,
@@ -148,6 +149,7 @@ class EvaluationService:
             snapshot_id=snapshot.snapshot_id,
             task=task,
             cache_key=EvaluationCacheKey(
+                snapshot_id=snapshot.snapshot_id,
                 snapshot_hash=snapshot.content_hash,
                 profile_hash=task.profile_hash,
                 profile_bundle_hash=task.profile_bundle_hash,

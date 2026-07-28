@@ -74,6 +74,19 @@ class EvaluationProgressStore:
         self._write(updated)
         return updated
 
+    def claim_next(self) -> str | None:
+        batch = self._read()
+        if batch is None:
+            return None
+        for task_id, status in batch.tasks.items():
+            if status is EvaluationTaskStatus.RUNNING:
+                return task_id
+        for task_id, status in batch.tasks.items():
+            if status is EvaluationTaskStatus.QUEUED:
+                self.mark(task_id, EvaluationTaskStatus.RUNNING)
+                return task_id
+        return None
+
     def get(self) -> EvaluationProgress:
         batch = self._read()
         if batch is None:

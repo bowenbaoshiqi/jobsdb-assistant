@@ -169,6 +169,26 @@ def test_projection_change_invalidates_cache(tmp_path: Path) -> None:
     ).digest()
 
 
+def test_same_content_in_two_jobs_has_distinct_cache_keys(
+    tmp_path: Path,
+) -> None:
+    evaluator = service(tmp_path, FakeEvaluationRepository())
+    candidate = profile()
+    first = snapshot("1", "b")
+    second = snapshot("2", "b")
+    bundle = FakeProjector().project(candidate)
+
+    assert evaluator.cache_key(
+        candidate,
+        bundle,
+        first,
+    ).digest() != evaluator.cache_key(
+        candidate,
+        bundle,
+        second,
+    ).digest()
+
+
 def test_submit_persists_one_native_result(tmp_path: Path) -> None:
     repo = FakeEvaluationRepository()
     evaluator = service(tmp_path, repo)

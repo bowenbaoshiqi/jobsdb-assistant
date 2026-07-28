@@ -19,6 +19,7 @@ def test_skill_uses_python_as_state_authority(path: Path) -> None:
     assert "discover --keyword" in text
     assert "workflow evaluation-prepare" in text
     assert "workflow evaluation-submit" in text
+    assert "workflow evaluation-next" in text
     assert "workflow report" in text
     assert "workflow material-pending" in text
     assert "workflow material-submit" in text
@@ -52,3 +53,5 @@ def test_canonical_skill_drains_only_current_batch_evaluations() -> None:
     assert "historical `workspace/ai-tasks` directory" in text
     assert "/api/job-batch" in text
     assert "reports `scored`" in text
+    assert "MUST NOT send a final response" in text
+    assert "queued or running" in text

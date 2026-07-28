@@ -18,6 +18,7 @@ workflow profile-answers
 workflow profile-confirm
 discover --keyword
 workflow evaluation-prepare
+workflow evaluation-next
 workflow evaluation-submit
 workflow report
 workflow material-pending
@@ -43,6 +44,15 @@ For evaluation, read exactly the task's `profile_context_paths` and use the
 native loading order
 `config/profile.yml → modes/_shared.md → modes/_profile.md → modes/oferta.md → cv.md`.
 Never recreate or edit the immutable private profile bundle.
+
+While the Dashboard is running, continuously poll `/api/job-batch`. When it
+reports `scoring`, run `workflow evaluation-next`, service the returned
+`task_path`, and submit it with `workflow evaluation-submit`. Repeat until
+`evaluation-next` returns `drained` and the batch reports `scored`. Do not
+wait for another user message between discovery and evaluation.
+While any current task is queued or running, the Agent MUST NOT send a final
+response or treat a claimed task as completed work; keep the same Agent turn
+active until the queue is drained or the batch fails.
 
 JobsDB discovery is public browser navigation and never uses credentials or
 login. Do not request password configuration during discovery.

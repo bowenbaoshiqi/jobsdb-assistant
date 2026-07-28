@@ -13,16 +13,16 @@ from src.storage.database import Database
 runner = CliRunner()
 
 
-def test_discovery_config_is_headless_without_mutating_application_config() -> None:
+def test_discovery_config_is_headed_without_mutating_application_config() -> None:
     config = AppConfig(_env_file=None)
-    config.browser.headless = False
+    config.browser.headless = True
 
-    discovery = cli._headless_discovery_config(config)
+    discovery = cli._headed_discovery_config(config)
 
     assert discovery is not config
     assert discovery.browser is not config.browser
-    assert discovery.browser.headless is True
-    assert config.browser.headless is False
+    assert discovery.browser.headless is False
+    assert config.browser.headless is True
 
 
 def test_start_binds_only_loopback(monkeypatch) -> None:

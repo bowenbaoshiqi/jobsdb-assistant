@@ -201,6 +201,24 @@ def workflow_evaluation_submit(
     })
 
 
+@workflow_app.command("evaluation-next")
+def workflow_evaluation_next() -> None:
+    """领取当前 Dashboard 批次的下一项评分任务。"""
+    from src.dashboard.evaluation_progress import EvaluationProgressStore
+
+    task_id = EvaluationProgressStore(
+        Path("workspace/dashboard/evaluation-progress.json")
+    ).claim_next()
+    if task_id is None:
+        _print_json({"status": "drained", "task_id": None})
+        return
+    _print_json({
+        "status": "claimed",
+        "task_id": task_id,
+        "task_path": f"workspace/ai-tasks/{task_id}/task.json",
+    })
+
+
 @workflow_app.command("report")
 def workflow_report() -> None:
     """输出当前画像版本对应的完整评分报告。"""
