@@ -53,6 +53,22 @@ def material_router(service: DashboardMaterialService) -> APIRouter:
             path,
             media_type="application/pdf",
             filename="tailored-cv.pdf",
+            content_disposition_type="inline",
+        )
+
+    @router.get("/materials/{package_id}/pdf/download")
+    def download_pdf(package_id: str):
+        try:
+            path = service.pdf_path(package_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="material not found") from exc
+        except (ValueError, FileNotFoundError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return FileResponse(
+            path,
+            media_type="application/pdf",
+            filename="tailored-cv.pdf",
+            content_disposition_type="attachment",
         )
 
     @router.post("/materials/{package_id}/approve")
@@ -95,4 +111,3 @@ def material_router(service: DashboardMaterialService) -> APIRouter:
         }
 
     return router
-

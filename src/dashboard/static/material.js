@@ -47,8 +47,9 @@ function render(payload) {
     `画像 v${payload.profile_version} · 评分记录 ${payload.evaluation_id}`;
   elements.status.textContent = payload.review_status;
   const pdfUrl = `/api/materials/${encodeURIComponent(packageId)}/pdf`;
+  const downloadUrl = `${pdfUrl}/download`;
   elements.resume.src = pdfUrl;
-  elements.download.href = pdfUrl;
+  elements.download.href = downloadUrl;
   elements.cover.textContent = payload.cover_letter_text;
   elements.count.textContent = `${payload.cover_letter_word_count} 个英文单词`;
   fillList(elements.reviewer, payload.reviewer.findings);

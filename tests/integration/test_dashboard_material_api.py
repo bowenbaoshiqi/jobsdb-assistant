@@ -141,9 +141,12 @@ def test_material_detail_pdf_approval_rejection_and_regeneration(
     assert detail.json()["cover_letter_word_count"] == 120
     assert detail.json()["reviewer"]["findings"] == ["建议强化开头"]
     assert detail.json()["ats"]["findings"] == ["建议增加 LLM 关键词"]
-    assert client.get("/api/materials/package-1/pdf").headers[
-        "content-type"
-    ].startswith("application/pdf")
+    preview = client.get("/api/materials/package-1/pdf")
+    download = client.get("/api/materials/package-1/pdf/download")
+    assert preview.headers["content-type"].startswith("application/pdf")
+    assert preview.headers["content-disposition"].startswith("inline;")
+    assert download.headers["content-type"].startswith("application/pdf")
+    assert download.headers["content-disposition"].startswith("attachment;")
     assert client.post(
         "/api/materials/package-1/approve",
         json={"fact_warning_overridden": False},
