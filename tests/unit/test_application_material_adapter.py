@@ -1,8 +1,8 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
-import pytest
 import fitz
+import pytest
 
 from src.adapters.application_material import ApplicationMaterialAdapter
 from src.adapters.career_ops_profile import CareerOpsProfileBundle
