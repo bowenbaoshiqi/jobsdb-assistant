@@ -16,8 +16,8 @@ PDF for the current job.
 4. Preserve the default resume unchanged.
 5. Delete every non-default resume using its exact stable item identifier.
 6. Upload the approved tailored PDF for the current job.
-7. Do not interact with the `Make this my default resumé` checkbox. JobsDB
-   preserves the existing default when a new file is uploaded.
+7. If `Make this my default resumé` is checked, clear it before upload so the
+   existing default remains unchanged.
 8. Verify the final remote state contains exactly:
    - the original default resume, still marked `Default`; and
    - the current job-specific tailored PDF, not marked `Default`.

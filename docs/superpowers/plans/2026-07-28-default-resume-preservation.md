@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Never delete or replace the JobsDB resume marked `Default`.
-- Do not interact with the `Make this my default resumé` checkbox.
+- Clear `Make this my default resumé` before upload when it is checked.
 - Delete every non-default resume before upload.
 - The final state must contain exactly the original default resume and the current tailored PDF.
 - The tailored PDF must not be default and must be selected by exact filename in Quick Apply.
@@ -58,7 +58,7 @@ one default before any deletion.
 
 For each non-default record, click the options button scoped by its stable
 item identifier and then its matching delete action. Re-read state after each
-mutation. Do not click the default checkbox during upload.
+mutation. Clear the default checkbox during upload when it is checked.
 
 - [ ] **Step 5: Verify the final remote state**
 

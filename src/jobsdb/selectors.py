@@ -46,6 +46,9 @@ PROFILE_ADD_RESUME = (
     'button[data-automation="resume-edit-link"]'
 )
 PROFILE_RESUME_FILE_INPUT = 'input[data-automation="resume-upload"]'
+PROFILE_RESUME_DEFAULT_CHECKBOX_CHECKED = (
+    'input#defaultResume[type="checkbox"]:checked'
+)
 PROFILE_RESUME_DONE = 'button[data-automation="manage-resume-done"]'
 PROFILE_FIRST_RESUME_OPTIONS = (
     '[data-automation^="resume-item-"]'

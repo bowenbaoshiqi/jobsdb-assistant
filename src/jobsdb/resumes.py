@@ -12,6 +12,7 @@ from pathlib import Path
 from src.browser.ports.page_controller import PageController
 from src.jobsdb.selectors import (
     PROFILE_ADD_RESUME,
+    PROFILE_RESUME_DEFAULT_CHECKBOX_CHECKED,
     PROFILE_RESUME_DELETE_CONFIRM,
     PROFILE_RESUME_DONE,
     PROFILE_RESUME_FILE_INPUT,
@@ -109,15 +110,23 @@ class RemoteResumeManager:
         with tempfile.TemporaryDirectory(prefix="jobsdb-resume-") as directory:
             upload = Path(directory) / remote_name
             shutil.copyfile(pdf, upload)
+            if await self.page.is_visible(
+                PROFILE_RESUME_DEFAULT_CHECKBOX_CHECKED
+            ):
+                await self.page.click(
+                    PROFILE_RESUME_DEFAULT_CHECKBOX_CHECKED
+                )
             await self.page.set_input_files(
                 PROFILE_RESUME_FILE_INPUT,
                 str(upload),
             )
+            records = await self._wait_for_uploaded(
+                default=default,
+                remote_name=remote_name,
+            )
             if await self.page.is_visible(PROFILE_RESUME_DONE):
                 await self.page.click(PROFILE_RESUME_DONE)
-            await self.page.wait_for_timeout(500)
 
-        records = await self._list_records()
         default_matches = [
             item
             for item in records
@@ -139,6 +148,21 @@ class RemoteResumeManager:
         return RemoteResumeReceipt(
             filename=remote_name,
             uploaded_at=datetime.now(UTC),
+        )
+
+    async def _wait_for_uploaded(
+        self,
+        *,
+        default: RemoteResumeRecord,
+        remote_name: str,
+    ) -> list[RemoteResumeRecord]:
+        for _ in range(20):
+            records = await self._list_records()
+            if any(item.filename == remote_name for item in records):
+                return records
+            await self.page.wait_for_timeout(500)
+        raise ResumeUploadMismatchError(
+            f"JobsDB did not finish uploading {remote_name!r}"
         )
 
     async def _delete_non_default(
