@@ -208,7 +208,14 @@ function renderActions(job, checkbox) {
       }
     }
     if (approved && job.apply_type === "apply") {
-      const handoff = text("button", "下载定制简历并人工投递", "primary");
+      const coverOnly = job.material.material_mode === "cover_letter_only";
+      const handoff = text(
+        "button",
+        coverOnly
+          ? "使用默认简历和求职信人工投递"
+          : "下载定制简历并人工投递",
+        "primary",
+      );
       handoff.type = "button";
       handoff.addEventListener("click", () => manualHandoff(job, handoff));
       actions.append(handoff);
@@ -269,13 +276,19 @@ async function manualHandoff(job, button) {
     );
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.detail || "无法准备人工投递材料。");
-    const download = document.createElement("a");
-    download.href = payload.resume_url;
-    download.download = "";
-    download.click();
+    if (payload.resume_url) {
+      const download = document.createElement("a");
+      download.href = payload.resume_url;
+      download.download = "";
+      download.click();
+    }
     await navigator.clipboard.writeText(payload.cover_letter_text);
     if (jobWindow) jobWindow.location = payload.job_url;
-    setStatus("定制简历已下载，求职信已复制，并已打开 JobsDB 职位页。");
+    setStatus(
+      payload.resume_url
+        ? "定制简历已下载，求职信已复制，并已打开 JobsDB 职位页。"
+        : "将使用 JobsDB 默认简历，求职信已复制，并已打开职位页。",
+    );
   } catch (error) {
     if (jobWindow) jobWindow.close();
     setError(error.message);

@@ -23,6 +23,7 @@ from src.jobsdb.selectors import (
 def _verify_review_js(context: ApplicationMaterialContext) -> str:
     job_id = json.dumps(context.job_id)
     filename = json.dumps(context.resume_filename)
+    require_resume = json.dumps(context.resume_filename is not None)
     cover_excerpt = json.dumps(
         " ".join(context.cover_letter_text.split())[:80]
     )
@@ -33,10 +34,11 @@ def _verify_review_js(context: ApplicationMaterialContext) -> str:
         .map(item => normalize(item.value)).join(' ');
       const job = {job_id};
       const resume = {filename};
+      const requireResume = {require_resume};
       const cover = {cover_excerpt};
       return {{
         job: location.href.includes(job) || body.includes(job),
-        resume: body.includes(resume),
+        resume: !requireResume || body.includes(resume),
         cover_letter: body.includes(cover) || values.includes(cover)
       }};
     }}"""

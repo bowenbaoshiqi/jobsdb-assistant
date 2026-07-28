@@ -1,6 +1,6 @@
 from src.browser.fake.fake_page import FakeElement, FakePageController
-from src.jobsdb.apply.context import ApplicationMaterialContext
 from src.domain.material import MaterialMode
+from src.jobsdb.apply.context import ApplicationMaterialContext
 from src.jobsdb.apply.flow import ApplyFlow
 from src.jobsdb.apply.steps.cover_letter_step import (
     CoverLetterStep,

@@ -15,10 +15,7 @@ from src.domain.application_execution import (
     ApplicationIdentity,
 )
 from src.domain.job import ApplyType
-from src.domain.material import (
-    ApplicationPackage,
-    MaterialReviewStatus,
-)
+from src.domain.material import ApplicationPackage, MaterialReviewStatus
 from src.jobsdb.apply.context import ApplicationMaterialContext
 from src.jobsdb.resumes import (
     HumanInterventionRequiredError,
@@ -57,7 +54,7 @@ class ResumeReplacer(Protocol):
 class ManualApplicationHandoff:
     execution_id: str
     job_url: str
-    resume_path: Path
+    resume_path: Path | None
     cover_letter_text: str
 
 
@@ -162,21 +159,25 @@ class ApplicationExecutionService:
                 ApplicationExecutionStatus.MANUAL_HANDOFF,
                 at=self.now(),
             )
-        _resume, cover = self._verified_artifacts(package)
+        resume, cover = self._verified_artifacts(package)
         return ManualApplicationHandoff(
             execution_id=execution.id,
             job_url=snapshot.canonical_url,
-            resume_path=Path(package.resume.path),
+            resume_path=resume,
             cover_letter_text=cover.read_text(encoding="utf-8"),
         )
 
     async def _prepare(self, execution: ApplicationExecution) -> None:
         try:
             context, resume = self._context(execution)
-            await self.resume_manager.replace_all_with(
-                resume,
-                context.resume_filename,
-            )
+            if (
+                resume is not None
+                and context.resume_filename is not None
+            ):
+                await self.resume_manager.replace_all_with(
+                    resume,
+                    context.resume_filename,
+                )
             result = await self.wizard.prepare(context)
             if result.status is not ApplyStatus.READY_FOR_REVIEW:
                 raise HumanInterventionRequiredError(
@@ -235,12 +236,16 @@ class ApplicationExecutionService:
     def _context(
         self,
         execution: ApplicationExecution,
-    ) -> tuple[ApplicationMaterialContext, Path]:
+    ) -> tuple[ApplicationMaterialContext, Path | None]:
         package = self._approved_package(execution.identity.job_id)
+        package_resume_hash = (
+            None if package.resume is None else package.resume.sha256
+        )
         if (
             package.id != execution.identity.package_id
             or package.version != execution.identity.material_version
-            or package.resume.sha256 != execution.identity.resume_sha256
+            or package.material_mode != execution.identity.material_mode
+            or package_resume_hash != execution.identity.resume_sha256
             or package.cover_letter.sha256
             != execution.identity.cover_letter_sha256
         ):
@@ -251,8 +256,13 @@ class ApplicationExecutionService:
             ApplicationMaterialContext(
                 job_id=execution.identity.job_id,
                 package_id=package.id,
-                resume_filename=execution.remote_resume_filename,
-                resume_sha256=package.resume.sha256,
+                material_mode=package.material_mode,
+                resume_filename=(
+                    None
+                    if package.resume is None
+                    else execution.remote_resume_filename
+                ),
+                resume_sha256=package_resume_hash,
                 cover_letter_text=cover_text,
                 cover_letter_sha256=package.cover_letter.sha256,
             ),
@@ -273,10 +283,21 @@ class ApplicationExecutionService:
     @staticmethod
     def _verified_artifacts(
         package: ApplicationPackage,
-    ) -> tuple[Path, Path]:
-        resume = Path(package.resume.path).resolve()
+    ) -> tuple[Path | None, Path]:
+        resume = (
+            None
+            if package.resume is None
+            else Path(package.resume.path).resolve()
+        )
         cover = Path(package.cover_letter.path).resolve()
-        if not resume.is_file() or hash_file(resume) != package.resume.sha256:
+        if (
+            package.resume is not None
+            and (
+                resume is None
+                or not resume.is_file()
+                or hash_file(resume) != package.resume.sha256
+            )
+        ):
             raise ValueError("approved resume hash mismatch")
         if (
             not cover.is_file()
@@ -298,9 +319,16 @@ class ApplicationExecutionService:
         account_alias: str,
     ) -> ApplicationExecution:
         created = self.now()
+        resume_hash = (
+            None if package.resume is None else package.resume.sha256
+        )
         filename = (
-            f"JBA_{snapshot.job_id}_v{package.version}_"
-            f"{package.resume.sha256[:8]}.pdf"
+            "jobsdb-default-resume"
+            if resume_hash is None
+            else (
+                f"JBA_{snapshot.job_id}_v{package.version}_"
+                f"{resume_hash[:8]}.pdf"
+            )
         )
         return ApplicationExecution(
             id=f"application-{uuid.uuid4().hex}",
@@ -311,7 +339,8 @@ class ApplicationExecutionService:
                 account_alias=account_alias,
                 package_id=package.id,
                 material_version=package.version,
-                resume_sha256=package.resume.sha256,
+                material_mode=package.material_mode,
+                resume_sha256=resume_hash,
                 cover_letter_sha256=package.cover_letter.sha256,
                 apply_type=snapshot.apply_type,
             ),

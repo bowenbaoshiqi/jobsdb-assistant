@@ -127,6 +127,7 @@ class DashboardQueryService:
             else DashboardMaterialSummary(
                 package_id=material_package.id,
                 version=material_package.version,
+                material_mode=material_package.material_mode,
                 review_status=material_package.review_status,
                 task_status=None,
             )

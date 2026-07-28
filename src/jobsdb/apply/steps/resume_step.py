@@ -8,6 +8,7 @@ import asyncio
 import json
 
 from src.browser.ports.page_controller import PageController
+from src.domain.material import MaterialMode
 from src.jobsdb.apply.context import ApplicationMaterialContext
 from src.jobsdb.apply.steps.navigation import click_next_or_submit
 from src.jobsdb.selectors import DEFAULT_RESUME_RADIO, RESUME_DROPDOWN, RESUME_SELECTION
@@ -53,7 +54,11 @@ class ResumeStep:
     async def handle(self, page: PageController, human=None) -> bool:
         """处理简历选择(v1.0 _handle_resume_step)"""
         try:
-            if self.context is not None:
+            if (
+                self.context is not None
+                and self.context.material_mode
+                is MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+            ):
                 selected = await page.evaluate(
                     _select_resume_js(self.context.resume_filename)
                 )

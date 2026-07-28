@@ -301,7 +301,11 @@ def register_routes(app: FastAPI, dependencies) -> None:
         return {
             "execution_id": handoff.execution_id,
             "job_url": handoff.job_url,
-            "resume_url": f"/api/jobs/{job_id}/approved-resume",
+            "resume_url": (
+                None
+                if handoff.resume_path is None
+                else f"/api/jobs/{job_id}/approved-resume"
+            ),
             "cover_letter_text": handoff.cover_letter_text,
         }
 
