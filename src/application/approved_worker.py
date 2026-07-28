@@ -1,0 +1,48 @@
+"""Lifecycle wrapper for the persistent approved-application worker."""
+
+from __future__ import annotations
+
+import asyncio
+
+from src.application.approved_runtime import ApprovedApplicationRuntime
+from src.application.execute_application import ApplicationExecutionService
+
+
+class ApprovedApplicationWorker:
+    def __init__(
+        self,
+        *,
+        service: ApplicationExecutionService,
+        runtime: ApprovedApplicationRuntime,
+        idle_poll_seconds: float = 1.0,
+    ) -> None:
+        self.service = service
+        self.runtime = runtime
+        self.idle_poll_seconds = idle_poll_seconds
+        self.task: asyncio.Task | None = None
+        self._stop = asyncio.Event()
+
+    async def start(self) -> None:
+        if self.task is not None and not self.task.done():
+            return
+        self._stop.clear()
+        self.task = asyncio.create_task(self._run())
+
+    async def close(self) -> None:
+        self._stop.set()
+        if self.task is not None:
+            await self.task
+            self.task = None
+        await self.runtime.close()
+
+    async def _run(self) -> None:
+        while not self._stop.is_set():
+            if await self.service.run_next():
+                continue
+            try:
+                await asyncio.wait_for(
+                    self._stop.wait(),
+                    timeout=self.idle_poll_seconds,
+                )
+            except TimeoutError:
+                continue

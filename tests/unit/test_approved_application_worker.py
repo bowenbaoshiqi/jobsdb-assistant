@@ -9,7 +9,14 @@ from src.application.approved_worker import ApprovedApplicationWorker
 @pytest.mark.asyncio
 async def test_worker_polls_execution_service_and_closes_runtime() -> None:
     service = AsyncMock()
-    service.run_next.side_effect = [True, False, False]
+    calls = 0
+
+    async def run_next() -> bool:
+        nonlocal calls
+        calls += 1
+        return calls == 1
+
+    service.run_next.side_effect = run_next
     runtime = AsyncMock()
     worker = ApprovedApplicationWorker(
         service=service,

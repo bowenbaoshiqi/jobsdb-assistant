@@ -1,5 +1,4 @@
 import socket
-from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock
 
 from typer.testing import CliRunner
@@ -125,12 +124,9 @@ def test_build_production_app_does_not_require_login(
     monkeypatch,
     tmp_path,
 ) -> None:
-    config = SimpleNamespace(
-        storage=SimpleNamespace(
-            database_path=str(tmp_path / "jobs.db"),
-        ),
-        login=SimpleNamespace(mode="manual"),
-    )
+    config = cli.get_config()
+    config.storage.database_path = str(tmp_path / "jobs.db")
+    config.login.mode = "manual"
     monkeypatch.setattr(cli, "get_config", lambda: config)
 
     dashboard = cli.build_production_app()
