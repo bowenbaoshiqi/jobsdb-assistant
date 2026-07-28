@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 from collections import Counter
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Optional
@@ -171,6 +172,15 @@ def workflow_evaluation_submit(
             payload,
         )
     )
+    from src.dashboard.evaluation_progress import (
+        EvaluationProgressStore,
+        EvaluationTaskStatus,
+    )
+
+    with suppress(KeyError):
+        EvaluationProgressStore(
+            Path("workspace/dashboard/evaluation-progress.json")
+        ).mark(task_id, EvaluationTaskStatus.COMPLETED)
     _print_json({
         "status": "saved",
         "evaluation_id": evaluation.id,
