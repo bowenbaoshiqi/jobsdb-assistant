@@ -25,6 +25,7 @@ from src.storage.v03_migration import add_v03_schema
 from src.storage.v04_migration import add_v04_schema
 from src.storage.v05_migration import add_v05_schema
 from src.storage.v06_migration import add_v06_schema
+from src.storage.v07_migration import add_v07_schema
 
 
 def _mark_legacy_schema(_conn: sqlite3.Connection) -> None:
@@ -119,6 +120,11 @@ class Database:
                     6,
                     "v0.6 application execution schema",
                     add_v06_schema,
+                ),
+                Migration(
+                    7,
+                    "v0.7 job batch schema",
+                    add_v07_schema,
                 ),
             ]
         )
