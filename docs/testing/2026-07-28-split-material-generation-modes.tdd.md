@@ -27,6 +27,7 @@
 | Dashboard exposes two actions and a mode-aware preview | Dashboard tests failed because the two button IDs and default-resume notice did not exist | `22 passed`; both Dashboard JavaScript files passed `node --check` |
 | Cover-only execution keeps the default resume | Execution tests failed because package execution dereferenced a missing resume and the resume step attempted exact-file selection | `35 passed` across execution workflow, material-aware apply steps, and Dashboard API |
 | Cover-only manual handoff omits resume download | API test received a tailored-resume URL for a cover-only handoff | API now returns `resume_url: null`; execution handoff returns `resume_path: None` |
+| Cover-only Agent tasks avoid unused resume rewriting | Adapter test failed because `tailored_sections` was mandatory | Cover-only tasks expose no tailored section names and accept only the cover letter plus checks |
 
 Checkpoint commits:
 
@@ -39,6 +40,9 @@ Checkpoint commits:
 - `58f2cf1` — automatic execution RED
 - `acb4b14` — manual handoff RED
 - `2dec03e` — application execution GREEN
+- `cde0aba` — Agent protocol RED
+- `84b2719` — focused cover-only task RED
+- `8a4182b` — focused Agent task and Skill GREEN
 
 ## Test Specification
 
@@ -56,6 +60,8 @@ Checkpoint commits:
 | 10 | Cover-only resume step retains the existing default selection | `tests/unit/test_material_aware_apply_steps.py` | Unit | PASS |
 | 11 | Cover-only review verifies job and cover letter without a tailored filename | `tests/unit/test_material_aware_apply_steps.py` | Unit | PASS |
 | 12 | Cover-only manual handoff has no resume URL | `tests/integration/test_dashboard_api.py` | Integration | PASS |
+| 13 | Cover-only Agent result omits unused tailored sections | `tests/unit/test_application_material_adapter.py` | Unit | PASS |
+| 14 | Canonical CC/Codex Skill preserves material mode | `tests/unit/test_dashboard_documentation.py` | Unit | PASS |
 
 ## Regression and Coverage
 
@@ -92,4 +98,3 @@ read-only validation confirmed:
 Cover-only preview and application state transitions are covered by isolated
 integration tests so validation does not create or mutate the user's current
 material batch.
-
