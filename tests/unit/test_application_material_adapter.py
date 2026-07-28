@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+import fitz
 
 from src.adapters.application_material import ApplicationMaterialAdapter
 from src.adapters.career_ops_profile import CareerOpsProfileBundle
@@ -16,8 +17,12 @@ COMMIT = "c" * 40
 
 
 def _inputs(tmp_path: Path):
-    cv = tmp_path / "cv.md"
-    cv.write_text("# Bowen Bao\nEnterprise AI leader", encoding="utf-8")
+    cv = tmp_path / "cv.pdf"
+    document = fitz.open()
+    document.new_page(width=595.2756, height=841.8898)
+    document.new_page(width=595.2756, height=841.8898)
+    document.save(cv)
+    document.close()
     profile = CandidateProfile(
         id="candidate-1",
         version=2,
@@ -84,8 +89,11 @@ def _result(task) -> dict:
         "evaluation_id": task.evaluation_id,
         "material_version": task.material_version,
         "source_cv_hash": task.source_cv_hash,
-        "tailored_cv_source": {"summary": "Enterprise AI leader"},
-        "resume_path": "staging/cv.pdf",
+        "tailored_sections": {
+            "professional_summary": "Enterprise AI leader",
+            "career_highlights": ["One", "Two", "Three", "Four"],
+            "core_competencies": ["Leadership", "Platforms", "Governance"],
+        },
         "cover_letter_path": "staging/cover-letter.txt",
         "cover_letter_text": " ".join(["word"] * 120),
         "cover_letter_word_count": 120,
@@ -162,7 +170,7 @@ def test_result_rejects_identity_mismatch(
         adapter.validate_result(task, payload)
 
 
-def test_result_requires_artifacts_word_limit_and_ordered_checks(
+def test_result_requires_structured_sections_word_limit_and_ordered_checks(
     tmp_path: Path,
 ) -> None:
     profile, bundle, snapshot, evaluation = _inputs(tmp_path)
@@ -178,9 +186,17 @@ def test_result_requires_artifacts_word_limit_and_ordered_checks(
     valid = _result(task)
     result = adapter.validate_result(task, valid)
     assert result.cover_letter_word_count == 120
+    assert len(result.tailored_sections.career_highlights) == 4
+    assert not hasattr(result, "resume_path")
 
     for mutation in (
-        {"resume_path": ""},
+        {
+            "tailored_sections": {
+                "professional_summary": "Summary",
+                "career_highlights": ["Only one"],
+                "core_competencies": ["One", "Two", "Three"],
+            }
+        },
         {"cover_letter_word_count": 99},
         {"check_order": ["facts", "reviewer", "ats"]},
     ):

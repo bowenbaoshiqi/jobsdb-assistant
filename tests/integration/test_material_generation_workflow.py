@@ -12,7 +12,7 @@ from tests.unit.test_generate_materials import (
 NOW = datetime(2026, 7, 27, tzinfo=UTC)
 
 
-def _valid_result(task, resume: Path, cover: Path) -> dict:
+def _valid_result(task, cover: Path) -> dict:
     text = " ".join(["word"] * 120)
     return {
         "task_id": task.task_id,
@@ -28,8 +28,11 @@ def _valid_result(task, resume: Path, cover: Path) -> dict:
         "evaluation_id": task.evaluation_id,
         "material_version": task.material_version,
         "source_cv_hash": task.source_cv_hash,
-        "tailored_cv_source": {"summary": "AI leader"},
-        "resume_path": str(resume),
+        "tailored_sections": {
+            "professional_summary": "AI leader",
+            "career_highlights": ["One", "Two", "Three", "Four"],
+            "core_competencies": ["Leadership", "Platforms", "Governance"],
+        },
         "cover_letter_path": str(cover),
         "cover_letter_text": text,
         "cover_letter_word_count": 120,
@@ -56,19 +59,18 @@ def test_submit_restart_and_regenerate_preserve_immutable_versions(
     )
     pending = plan.pending[0]
     staging = checkpoints.staging_dir(pending.task.task_id)
-    resume = staging / "cv.pdf"
-    resume.write_bytes(b"%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF\n")
     cover = staging / "cover-letter.txt"
     cover.write_text(" ".join(["word"] * 120), encoding="utf-8")
 
     package = service.submit(
         pending,
-        _valid_result(pending.task, resume, cover),
+        _valid_result(pending.task, cover),
         completed_at=NOW,
     )
 
     assert package.version == 1
     assert Path(package.resume.path).is_file()
+    assert package.layout.passed
     assert repository.list_batch("batch-1")[0].status is (
         MaterialTaskStatus.GENERATED
     )
