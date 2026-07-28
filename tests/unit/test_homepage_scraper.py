@@ -171,6 +171,40 @@ async def test_search_scraper_uses_next_page_until_limit(
 
 
 @pytest.mark.asyncio
+async def test_search_scraper_excludes_history_before_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("src.jobsdb.homepage.asyncio.sleep", AsyncNoOp())
+    page = FakePageController()
+    current_page = 1
+    first_page = [job_data(str(index)) for index in range(1, 31)]
+    second_page = [job_data(str(index)) for index in range(31, 61)]
+
+    async def evaluate(expression: str):
+        if expression == EXTRACTION_SCRIPT:
+            return first_page if current_page == 1 else second_page
+        return None
+
+    async def click(_selector: str, timeout: float = 30.0) -> None:
+        nonlocal current_page
+        current_page = 2
+
+    page.evaluate = AsyncMock(side_effect=evaluate)
+    page.is_visible = AsyncMock(return_value=True)
+    page.click = AsyncMock(side_effect=click)
+    page.wait_for_load_state = AsyncMock()
+
+    jobs = await HomepageScraper(page).get_search_jobs(
+        max_jobs=15,
+        excluded_job_ids={str(index) for index in range(1, 46)},
+    )
+
+    assert [job.id for job in jobs] == [
+        str(index) for index in range(46, 61)
+    ]
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("max_jobs", "no_growth_limit", "message"),
     [
