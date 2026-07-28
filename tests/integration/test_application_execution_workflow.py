@@ -8,6 +8,7 @@ from src.domain.material import (
     ApplicationPackage,
     MaterialArtifact,
     MaterialCheck,
+    MaterialMode,
     MaterialReviewAction,
 )
 from src.jobsdb.resumes import RemoteResumeReceipt
@@ -58,6 +59,9 @@ def _service(
     tmp_path: Path,
     *,
     apply_type: ApplyType = ApplyType.QUICK_APPLY,
+    material_mode: MaterialMode = (
+        MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+    ),
 ):
     database = Database(str(tmp_path / "jobs.db"))
     database.save_discovered_job(
@@ -75,7 +79,10 @@ def _service(
     snapshot = database.get_current_job_snapshot_record("job-1")
     assert snapshot is not None
     resume = tmp_path / "cv.pdf"
-    resume.write_bytes(b"%PDF-1.7\n" + b"x" * 40 + b"\n%%EOF\n")
+    if material_mode is not MaterialMode.COVER_LETTER_ONLY:
+        resume.write_bytes(
+            b"%PDF-1.7\n" + b"x" * 40 + b"\n%%EOF\n"
+        )
     cover = tmp_path / "cover.txt"
     cover.write_text(" ".join(["approved"] * 120), encoding="utf-8")
     import hashlib
@@ -100,9 +107,16 @@ def _service(
             evaluation_id="evaluation-1",
             profile_version=1,
             version=1,
-            resume=MaterialArtifact(
-                path=str(resume),
-                sha256=hashlib.sha256(resume.read_bytes()).hexdigest(),
+            material_mode=material_mode,
+            resume=(
+                None
+                if material_mode is MaterialMode.COVER_LETTER_ONLY
+                else MaterialArtifact(
+                    path=str(resume),
+                    sha256=hashlib.sha256(
+                        resume.read_bytes()
+                    ).hexdigest(),
+                )
             ),
             cover_letter=MaterialArtifact(
                 path=str(cover),
@@ -156,6 +170,28 @@ async def test_queue_and_worker_prepare_bind_current_approved_package(
     assert ready.status is ApplicationExecutionStatus.WAITING_FOR_CONFIRMATION
     assert resumes.calls[0][1].startswith("JBA_job-1_v1_")
     assert wizard.prepared[0].resume_sha256 == queued.identity.resume_sha256
+
+
+async def test_cover_letter_only_prepare_keeps_default_resume(
+    tmp_path: Path,
+) -> None:
+    service, executions, resumes, wizard = _service(
+        tmp_path,
+        material_mode=MaterialMode.COVER_LETTER_ONLY,
+    )
+
+    queued = service.queue("job-1", account_alias="personal")
+    await service.run_next()
+    await service.run_next()
+
+    assert executions.get(queued.id).status is (
+        ApplicationExecutionStatus.WAITING_FOR_CONFIRMATION
+    )
+    assert resumes.calls == []
+    assert wizard.prepared[0].material_mode is (
+        MaterialMode.COVER_LETTER_ONLY
+    )
+    assert wizard.prepared[0].resume_filename is None
 
 
 async def test_confirm_then_worker_submits_exact_execution(

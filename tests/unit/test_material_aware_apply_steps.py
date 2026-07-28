@@ -1,5 +1,6 @@
 from src.browser.fake.fake_page import FakeElement, FakePageController
 from src.jobsdb.apply.context import ApplicationMaterialContext
+from src.domain.material import MaterialMode
 from src.jobsdb.apply.flow import ApplyFlow
 from src.jobsdb.apply.steps.cover_letter_step import (
     CoverLetterStep,
@@ -30,6 +31,18 @@ def _context() -> ApplicationMaterialContext:
     )
 
 
+def _cover_only_context() -> ApplicationMaterialContext:
+    return ApplicationMaterialContext(
+        job_id="92358982",
+        package_id="package-cover",
+        material_mode=MaterialMode.COVER_LETTER_ONLY,
+        resume_filename=None,
+        resume_sha256=None,
+        cover_letter_text=" ".join(["approved"] * 120),
+        cover_letter_sha256="b" * 64,
+    )
+
+
 async def test_resume_step_selects_exact_context_filename() -> None:
     page = FakePageController()
     page.set_eval_result(_select_resume_js(_context().resume_filename), True)
@@ -46,6 +59,15 @@ async def test_resume_step_stops_when_exact_filename_is_missing() -> None:
     page.set_element(NEXT_STEP_BUTTON, FakeElement(visible=True))
 
     assert not await ResumeStep(_context()).handle(page)
+
+
+async def test_cover_only_resume_step_keeps_default_resume() -> None:
+    page = FakePageController()
+    next_button = FakeElement(visible=True)
+    page.set_element(NEXT_STEP_BUTTON, next_button)
+
+    assert await ResumeStep(_cover_only_context()).handle(page)
+    assert next_button.click.call_count == 1
 
 
 async def test_cover_letter_step_includes_exact_approved_text() -> None:
@@ -94,6 +116,19 @@ async def test_review_rejects_material_mismatch() -> None:
     page.set_element(SUBMIT_APPLICATION_BUTTON, FakeElement(visible=True))
 
     assert not await ReviewStep(_context(), allow_submit=False).handle(page)
+
+
+async def test_cover_only_review_does_not_require_tailored_filename() -> None:
+    page = FakePageController()
+    page.set_eval_result(
+        _verify_review_js(_cover_only_context()),
+        {"job": True, "resume": True, "cover_letter": True},
+    )
+
+    assert await ReviewStep(
+        _cover_only_context(),
+        allow_submit=False,
+    ).handle(page)
 
 
 async def test_material_flow_stops_at_verified_review() -> None:
