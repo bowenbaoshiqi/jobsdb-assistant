@@ -303,6 +303,29 @@ def test_apply_manual_handoff_returns_safe_material_links(
     assert "/private/cv.pdf" not in response.text
 
 
+def test_cover_only_manual_handoff_has_no_resume_download(
+    dashboard_api: tuple[TestClient, AsyncMock],
+) -> None:
+    client, _runner = dashboard_api
+    service = (
+        client.app.state.dashboard_dependencies
+        .approved_application_service
+    )
+    service.manual_handoff.return_value = SimpleNamespace(
+        execution_id="manual-cover",
+        job_url="https://hk.jobsdb.com/job/apply-1",
+        resume_path=None,
+        cover_letter_text="Approved cover letter.",
+    )
+
+    response = client.post(
+        "/api/jobs/apply-1/applications/manual-handoff",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["resume_url"] is None
+
+
 def test_dashboard_html_loads(
     dashboard_api: tuple[TestClient, AsyncMock],
 ) -> None:

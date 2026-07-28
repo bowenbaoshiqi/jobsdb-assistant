@@ -265,3 +265,21 @@ def test_manual_apply_handoff_uses_approved_material(tmp_path: Path) -> None:
     assert executions.get(handoff.execution_id).status is (
         ApplicationExecutionStatus.MANUAL_HANDOFF
     )
+
+
+def test_cover_only_manual_handoff_uses_default_resume(
+    tmp_path: Path,
+) -> None:
+    service, _executions, _resumes, _wizard = _service(
+        tmp_path,
+        apply_type=ApplyType.APPLY,
+        material_mode=MaterialMode.COVER_LETTER_ONLY,
+    )
+
+    handoff = service.manual_handoff(
+        "job-1",
+        account_alias="personal",
+    )
+
+    assert handoff.resume_path is None
+    assert len(handoff.cover_letter_text.split()) == 120
