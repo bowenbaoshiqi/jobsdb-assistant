@@ -40,3 +40,15 @@ def test_canonical_skill_never_confirms_application_for_user() -> None:
 
     assert "python -m src.main start" not in text
     assert "must not confirm submission" in text
+
+
+def test_canonical_skill_drains_only_current_batch_evaluations() -> None:
+    text = Path(
+        ".agents/skills/jobsdb-assistant/SKILL.md"
+    ).read_text(encoding="utf-8")
+
+    assert "workspace/dashboard/evaluation-progress.json" in text
+    assert "whose status is `queued`" in text
+    assert "historical `workspace/ai-tasks` directory" in text
+    assert "/api/job-batch" in text
+    assert "reports `scored`" in text

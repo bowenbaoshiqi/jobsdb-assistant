@@ -183,6 +183,30 @@ Never send an Apply job to browser automation. Keep the service running while
 the user reviews scoring evidence, changes filters, or selects
 `waiting_for_materials` jobs.
 
+When the user archives the current batch and starts another search from the
+Dashboard, do not end the Agent turn after starting the server. Python owns
+discovery and automatically creates evaluation tasks scoped to the new
+15-job-or-smaller batch. The Agent must complete this loop:
+
+1. Read `/api/job-batch` until the current status is `scoring`, `scored`, or
+   `failed`. Do not rerun discovery and do not call the global
+   `workflow evaluation-prepare` command.
+2. When status is `scoring`, read
+   `workspace/dashboard/evaluation-progress.json`. Service only task IDs in
+   its current `tasks` map whose status is `queued`; never scan every
+   historical `workspace/ai-tasks` directory.
+3. For each current task, follow Section 3's Career Ops loading order,
+   produce one schema-valid A-F result, and submit it through
+   `workflow evaluation-submit`.
+4. Continue after an individual validation failure and report its task ID.
+   Python updates Dashboard progress after every successful submission.
+5. Stop the scoring loop only when `/api/evaluation-progress` reports no
+   queued or running tasks and `/api/job-batch` reports `scored`, or when the
+   batch reports `failed`.
+
+Dashboard HTTP requests are state observation only. They do not authorize
+job selection, material approval, Quick Apply preparation, or submission.
+
 ## 6. Service tailored-material tasks
 
 When the user creates a material batch in the Dashboard, remain in the
