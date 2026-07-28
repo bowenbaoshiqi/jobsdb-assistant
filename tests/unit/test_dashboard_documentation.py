@@ -45,6 +45,11 @@ def test_canonical_skill_starts_dashboard_without_auto_clicking() -> None:
     assert "Professional Summary" in instructions
     assert "Career Highlights" in instructions
     assert "Core Competencies" in instructions
+    assert "material_mode" in instructions
+    assert "cover_letter_only" in instructions
+    assert "tailored_resume_and_cover_letter" in instructions
+    assert "copy the task's `material_mode`" in instructions
+    assert "keeps the JobsDB default resume" in instructions
     assert "must not confirm submission" in instructions
 
 
