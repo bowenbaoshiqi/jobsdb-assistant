@@ -38,6 +38,23 @@ USER_AVATAR = '[data-automation="user-avatar"], [data-automation="account-menu"]
 USER_NAME = '[data-automation="user-name"], [data-automation="user-greeting"]'
 LOGOUT_BUTTON = 'a[href*="logout"], button:has-text("Log out")'
 
+# Profile resume management
+PROFILE_RESUME_SECTION = (
+    '[data-automation="resume-section"], '
+    '[data-automation="resumes-section"], '
+    'section:has-text("Resume")'
+)
+PROFILE_ADD_RESUME = (
+    'button:has-text("Add resume"), '
+    'button:has-text("Add or manage resumes")'
+)
+PROFILE_RESUME_FILE_INPUT = 'input[type="file"]'
+PROFILE_RESUME_DONE = 'button:has-text("Done")'
+PROFILE_RESUME_DELETE_CONFIRM = (
+    '[role="dialog"] button:has-text("Delete"), '
+    '[role="dialog"] button:has-text("Remove")'
+)
+
 # 登录异常
 LOGIN_ERROR_MESSAGE = '[data-automation="login-error"], .error-message, [role="alert"]'
 REAUTH_REQUIRED = 'text=Please sign in again, text=Session expired'

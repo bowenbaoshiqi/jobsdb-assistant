@@ -4,8 +4,8 @@ import pytest
 
 from src.jobsdb.resumes import (
     RemoteResumeManager,
-    ResumeListNotEmpty,
-    ResumeUploadMismatch,
+    ResumeListNotEmptyError,
+    ResumeUploadMismatchError,
 )
 
 
@@ -79,7 +79,7 @@ async def test_replace_stops_when_delete_cannot_be_confirmed(
     page = ResumePage(["old.pdf"])
     page.refuse_delete = True
 
-    with pytest.raises(ResumeListNotEmpty):
+    with pytest.raises(ResumeListNotEmptyError):
         await RemoteResumeManager(page).replace_all_with(
             _pdf(tmp_path),
             "JBA_42_v1_abcd1234.pdf",
@@ -117,7 +117,7 @@ async def test_replace_requires_exact_sole_remote_name(
             self.uploaded_path = Path(path)
             self.names.append("server-renamed.pdf")
 
-    with pytest.raises(ResumeUploadMismatch):
+    with pytest.raises(ResumeUploadMismatchError):
         await RemoteResumeManager(WrongNamePage([])).replace_all_with(
             _pdf(tmp_path),
             "JBA_42_v1_abcd1234.pdf",

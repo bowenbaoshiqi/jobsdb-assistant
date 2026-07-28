@@ -68,6 +68,7 @@ class FakePageController:
         self._eval_results: dict[str, Any] = {}
         self._screenshot_paths: list[str] = []
         self._cookies: list = []
+        self._input_files: list[tuple[str, str]] = []
         # ScrollSimulator 读 page.viewport_size["height"];给个合理默认让假实现可滚动
         self.viewport_size: dict = {"width": 1280, "height": 800}
 
@@ -162,6 +163,9 @@ class FakePageController:
 
     async def check(self, selector: str) -> None:
         pass
+
+    async def set_input_files(self, selector: str, path: str) -> None:
+        self._input_files.append((selector, path))
 
     # --- 等待 ---
     async def wait_for_selector(self, selector: str, timeout: float = 30.0) -> None:
