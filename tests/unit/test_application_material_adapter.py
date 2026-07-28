@@ -154,10 +154,14 @@ def test_cover_letter_only_mode_round_trips_through_result(
         snapshot=snapshot,
         evaluation=evaluation,
     )
-
-    result = adapter.validate_result(task, _result(task))
+    payload = _result(task)
+    payload.pop("tailored_sections")
+    result = adapter.validate_result(task, payload)
 
     assert result.material_mode is MaterialMode.COVER_LETTER_ONLY
+    assert result.tailored_sections is None
+    assert task.tailored_section_names == ()
+    assert task.region_line_budgets == {}
 
 
 def test_result_rejects_material_mode_mismatch(tmp_path: Path) -> None:
