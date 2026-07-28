@@ -12,8 +12,6 @@ from pathlib import Path
 from src.browser.ports.page_controller import PageController
 from src.jobsdb.selectors import (
     PROFILE_ADD_RESUME,
-    PROFILE_FIRST_RESUME_OPTIONS,
-    PROFILE_RESUME_DELETE,
     PROFILE_RESUME_DELETE_CONFIRM,
     PROFILE_RESUME_DONE,
     PROFILE_RESUME_FILE_INPUT,
@@ -28,10 +26,23 @@ _REMOTE_NAME = re.compile(
 
 _LIST_RESUMES_JS = r"""() => {
   /* JBA_LIST_RESUMES */
-  return Array.from(document.querySelectorAll(
-    'button[aria-label^="Options for "]'
-  )).map(button => button.getAttribute('aria-label')
-    .replace(/^Options for /, '').trim()).filter(Boolean);
+  const items = Array.from(document.querySelectorAll(
+    '[data-automation^="resume-item-"]'
+    + ':not([data-automation="resume-item-list"])'
+  ));
+  return items.map(item => {
+    const options = item.querySelector(
+      'button[aria-label^="Options for "]'
+    );
+    const label = options?.getAttribute('aria-label') || '';
+    return {
+      filename: label.replace(/^Options for /, '').trim(),
+      item_automation: item.getAttribute('data-automation') || '',
+      is_default: Boolean(item.querySelector(
+        '[data-automation^="resume-is-default-"]'
+      )),
+    };
+  }).filter(item => item.filename && item.item_automation);
 }"""
 
 class ResumeListNotEmptyError(RuntimeError):
@@ -50,6 +61,13 @@ class HumanInterventionRequiredError(RuntimeError):
 class RemoteResumeReceipt:
     filename: str
     uploaded_at: datetime
+
+
+@dataclass(frozen=True)
+class RemoteResumeRecord:
+    filename: str
+    item_automation: str
+    is_default: bool
 
 
 class RemoteResumeManager:
@@ -79,9 +97,14 @@ class RemoteResumeManager:
             PROFILE_RESUME_FILE_INPUT,
             timeout=10.0,
         )
-        await self._delete_all()
-        if await self._list_names():
-            raise ResumeListNotEmptyError("remote resume list is not empty")
+        initial = await self._list_records()
+        defaults = [item for item in initial if item.is_default]
+        if len(defaults) != 1:
+            raise ResumeListNotEmptyError(
+                "exactly one default remote resume is required"
+            )
+        default = defaults[0]
+        await self._delete_non_default(default)
 
         with tempfile.TemporaryDirectory(prefix="jobsdb-resume-") as directory:
             upload = Path(directory) / remote_name
@@ -94,29 +117,72 @@ class RemoteResumeManager:
                 await self.page.click(PROFILE_RESUME_DONE)
             await self.page.wait_for_timeout(500)
 
-        names = await self._list_names()
-        if names != [remote_name]:
+        records = await self._list_records()
+        default_matches = [
+            item
+            for item in records
+            if item.filename == default.filename and item.is_default
+        ]
+        tailored_matches = [
+            item
+            for item in records
+            if item.filename == remote_name and not item.is_default
+        ]
+        if (
+            len(records) != 2
+            or len(default_matches) != 1
+            or len(tailored_matches) != 1
+        ):
             raise ResumeUploadMismatchError(
-                f"expected sole remote resume {remote_name!r}, got {names!r}"
+                "expected preserved default plus sole tailored resume"
             )
         return RemoteResumeReceipt(
             filename=remote_name,
             uploaded_at=datetime.now(UTC),
         )
 
-    async def _delete_all(self) -> None:
+    async def _delete_non_default(
+        self,
+        default: RemoteResumeRecord,
+    ) -> None:
         for _ in range(20):
-            names = await self._list_names()
-            if not names:
+            records = await self._list_records()
+            defaults = [item for item in records if item.is_default]
+            if (
+                len(defaults) != 1
+                or defaults[0].filename != default.filename
+            ):
+                raise ResumeListNotEmptyError(
+                    "default remote resume changed during cleanup"
+                )
+            removable = [item for item in records if not item.is_default]
+            if not removable:
                 return
+            target = removable[0]
+            if not re.fullmatch(
+                r"resume-item-[A-Za-z0-9-]+",
+                target.item_automation,
+            ):
+                raise ResumeListNotEmptyError(
+                    "invalid remote resume item identifier"
+                )
+            item_id = target.item_automation.removeprefix("resume-item-")
+            options_selector = (
+                f'[data-automation="{target.item_automation}"] '
+                'button[aria-label^="Options for "]'
+            )
+            delete_selector = (
+                f'button[data-automation="delete-resume-button-{item_id}"]'
+            )
             try:
-                await self.page.click(PROFILE_FIRST_RESUME_OPTIONS)
+                await self.page.click(options_selector)
             except Exception as exc:
                 raise ResumeListNotEmptyError(
-                    f"could not delete remote resume {names[0]!r}"
+                    f"could not open remote resume {target.filename!r}"
                 ) from exc
-            await self.page.click(PROFILE_RESUME_DELETE)
-            await self.page.wait_for_timeout(200)
+            await self.page.wait_for_timeout(300)
+            await self.page.click(delete_selector)
+            await self.page.wait_for_timeout(300)
             if await self.page.is_visible(PROFILE_RESUME_DELETE_CONFIRM):
                 await self.page.click(PROFILE_RESUME_DELETE_CONFIRM)
             await self.page.wait_for_timeout(300)
@@ -124,15 +190,31 @@ class RemoteResumeManager:
             "remote resume deletion exceeded limit"
         )
 
-    async def _list_names(self) -> list[str]:
+    async def _list_records(self) -> list[RemoteResumeRecord]:
         value = await self.page.evaluate(_LIST_RESUMES_JS)
-        if not isinstance(value, list) or not all(
-            isinstance(item, str) for item in value
-        ):
+        if not isinstance(value, list):
             raise HumanInterventionRequiredError(
                 "JobsDB resume list could not be read"
             )
-        return [item.strip() for item in value if item.strip()]
+        try:
+            records = [
+                RemoteResumeRecord(
+                    filename=item["filename"].strip(),
+                    item_automation=item["item_automation"],
+                    is_default=item["is_default"],
+                )
+                for item in value
+                if isinstance(item, dict)
+            ]
+        except (KeyError, AttributeError, TypeError) as exc:
+            raise HumanInterventionRequiredError(
+                "JobsDB resume list could not be read"
+            ) from exc
+        if len(records) != len(value):
+            raise HumanInterventionRequiredError(
+                "JobsDB resume list could not be read"
+            )
+        return records
 
     @staticmethod
     def _validate(pdf: Path, remote_name: str) -> None:

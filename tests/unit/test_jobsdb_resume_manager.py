@@ -9,8 +9,6 @@ from src.jobsdb.resumes import (
 )
 from src.jobsdb.selectors import (
     PROFILE_ADD_RESUME,
-    PROFILE_FIRST_RESUME_OPTIONS,
-    PROFILE_RESUME_DELETE,
 )
 
 
@@ -68,7 +66,7 @@ class ResumePage:
                 raise RuntimeError("no resume options")
             index = int(selector.split('resume-item-')[1].split('"')[0])
             self.pending_delete = self.names[index]
-        elif selector == PROFILE_RESUME_DELETE and self.names:
+        elif "delete-resume-button-" in selector and self.pending_delete:
             self.names.remove(self.pending_delete)
             self.pending_delete = None
 
@@ -176,7 +174,9 @@ async def test_replace_requires_exact_sole_remote_name(
             self.names.append("server-renamed.pdf")
 
     with pytest.raises(ResumeUploadMismatchError):
-        await RemoteResumeManager(WrongNamePage([])).replace_all_with(
+        await RemoteResumeManager(
+            WrongNamePage(["default.pdf"])
+        ).replace_all_with(
             _pdf(tmp_path),
             "JBA_42_v1_abcd1234.pdf",
         )
