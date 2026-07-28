@@ -5,7 +5,7 @@
 用 mock page 构造 simulator,只测纯计算方法,不起浏览器。
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -132,6 +132,21 @@ class TestTypingDelay:
         for d in delays:
             # 句号延迟 = base(~0.08) + (0.3~0.8) > 0.3
             assert d > 0.3, f"句号延迟 {d} 未含额外停顿"
+
+    def test_punctuation_pause_survives_negative_base_sample(self):
+        """基础高斯采样为负时,句尾仍保留完整额外停顿"""
+        typing = make_typing()
+        with (
+            patch("src.simulation.typing.np.random.normal", return_value=-1.0),
+            patch(
+                "src.simulation.typing.random.uniform",
+                side_effect=lambda lower, _upper: lower,
+            ),
+            patch("src.simulation.typing.random.random", return_value=1.0),
+        ):
+            delay = typing._calculate_delay(".", 1, "a.b")
+
+        assert delay > 0.3
 
     def test_delay_min_floor_20ms(self):
         """延迟最小 20ms(下限保护)"""
