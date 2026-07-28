@@ -87,7 +87,11 @@ JOB_CARD_LINK = 'a[href*="/job/"]'
 # 职位列表
 JOB_LIST_CONTAINER = '[data-automation="job-list"], [class*="job-list"]'
 LOAD_MORE_BUTTON = 'button:has-text("Load more"), [data-automation="load-more"]'
-NEXT_PAGE_BUTTON = 'a[rel="next"], button:has-text("Next")'
+NEXT_PAGE_BUTTON = (
+    'a[rel="next"], '
+    'nav[aria-label="Pagination of results"] a:has-text("Next"), '
+    'button:has-text("Next")'
+)
 
 # =============================================================================
 # 职位详情页

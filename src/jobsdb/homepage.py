@@ -19,6 +19,7 @@ from typing import Optional
 from loguru import logger
 
 from src.browser.ports.page_controller import PageController
+from src.jobsdb.selectors import NEXT_PAGE_BUTTON
 from src.simulation.behavior import HumanSimulator
 from src.storage.models import JobListing
 
@@ -187,26 +188,44 @@ class HomepageScraper:
             raise ValueError("no_growth_limit must be at least 1")
 
         collected: dict[str, JobListing] = {}
-        stagnant_rounds = 0
+        for _page_number in range(1, max_jobs + 1):
+            stagnant_rounds = 0
+            while (
+                len(collected) < max_jobs
+                and stagnant_rounds < no_growth_limit
+            ):
+                before = len(collected)
+                job_data = await self.page.evaluate(EXTRACTION_SCRIPT) or []
+                for data in job_data:
+                    collected.setdefault(
+                        data["id"],
+                        self._to_listing(data),
+                    )
+                    if len(collected) >= max_jobs:
+                        break
 
-        while len(collected) < max_jobs and stagnant_rounds < no_growth_limit:
-            before = len(collected)
-            job_data = await self.page.evaluate(EXTRACTION_SCRIPT) or []
-            for data in job_data:
-                collected.setdefault(data["id"], self._to_listing(data))
-                if len(collected) >= max_jobs:
-                    break
+                if len(collected) == before:
+                    stagnant_rounds += 1
+                else:
+                    stagnant_rounds = 0
 
-            if len(collected) == before:
-                stagnant_rounds += 1
-            else:
-                stagnant_rounds = 0
+                if (
+                    len(collected) < max_jobs
+                    and stagnant_rounds < no_growth_limit
+                ):
+                    await self.page.evaluate(
+                        "window.scrollTo(0, document.body.scrollHeight)"
+                    )
+                    await asyncio.sleep(1.5)
 
-            if len(collected) < max_jobs and stagnant_rounds < no_growth_limit:
-                await self.page.evaluate(
-                    "window.scrollTo(0, document.body.scrollHeight)"
-                )
-                await asyncio.sleep(1.5)
+            if (
+                len(collected) >= max_jobs
+                or not await self.page.is_visible(NEXT_PAGE_BUTTON)
+            ):
+                break
+            await self.page.click(NEXT_PAGE_BUTTON)
+            await self.page.wait_for_load_state("domcontentloaded")
+            await asyncio.sleep(1.5)
 
         logger.info(f"Found {len(collected)} unique search jobs")
         return list(collected.values())
