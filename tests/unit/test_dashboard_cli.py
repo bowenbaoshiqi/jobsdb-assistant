@@ -1,4 +1,5 @@
 import socket
+from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock
 
 from typer.testing import CliRunner
@@ -135,6 +136,28 @@ def test_build_production_app_does_not_require_login(
     dependencies = dashboard.state.dashboard_dependencies
     assert dependencies.approved_application_service is not None
     assert dashboard.state.approved_application_worker is not None
+
+
+def test_build_production_app_falls_back_to_manual_login_without_account(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    config = cli.get_config()
+    config.storage.database_path = str(tmp_path / "jobs.db")
+    config.login.mode = "auto"
+    placeholder = SimpleNamespace(alias="default", email="", password="")
+    registry = MagicMock()
+    registry.resolve_active.return_value = placeholder
+    monkeypatch.setattr(cli, "get_config", lambda: config)
+    monkeypatch.setattr(cli, "AccountRegistry", Mock(return_value=registry))
+
+    dashboard = cli.build_production_app()
+
+    assert dashboard.title == "JobsDB Assistant"
+    assert config.login.mode == "manual"
+    registry.resolve_active.assert_called_once_with(
+        allow_placeholder=True,
+    )
 
 
 def test_start_with_browser_launches_readiness_thread(monkeypatch) -> None:
