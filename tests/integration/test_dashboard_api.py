@@ -1,5 +1,7 @@
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,6 +11,11 @@ from src.dashboard.application_service import DashboardApplicationService
 from src.dashboard.evaluation_progress import EvaluationProgressStore
 from src.dashboard.query_service import DashboardQueryService
 from src.domain.job import ApplyType, JobDetailCapture
+from src.domain.application_execution import (
+    ApplicationExecution,
+    ApplicationExecutionStatus,
+    ApplicationIdentity,
+)
 from src.storage.database import Database
 from src.storage.selection_repository import SelectionRepository
 
@@ -45,12 +52,43 @@ def dashboard_api(tmp_path) -> tuple[TestClient, AsyncMock]:
         runner=runner,
         now=lambda: NOW,
     )
+    approved = MagicMock()
+    approved.queue.return_value = ApplicationExecution(
+        id="approved-1",
+        identity=ApplicationIdentity(
+            job_id="quick-1",
+            snapshot_id="1",
+            snapshot_hash="a" * 64,
+            account_alias="default",
+            package_id="package-1",
+            material_version=1,
+            resume_sha256="b" * 64,
+            cover_letter_sha256="c" * 64,
+            apply_type=ApplyType.QUICK_APPLY,
+        ),
+        status=ApplicationExecutionStatus.QUEUED,
+        remote_resume_filename="JBA_quick-1_v1_bbbbbbbb.pdf",
+        created_at=NOW,
+        updated_at=NOW,
+    )
+    approved.confirm_submission.return_value = (
+        approved.queue.return_value.model_copy(
+            update={"status": ApplicationExecutionStatus.SUBMITTING}
+        )
+    )
+    approved.manual_handoff.return_value = SimpleNamespace(
+        execution_id="manual-1",
+        job_url="https://hk.jobsdb.com/job/apply-1",
+        resume_path=Path("/private/cv.pdf"),
+        cover_letter_text="Approved cover letter.",
+    )
     app = create_dashboard_app(
         DashboardDependencies(
             database=database,
             query_service=DashboardQueryService(database),
             selection_repository=SelectionRepository(database),
             application_service=application_service,
+            approved_application_service=approved,
             evaluation_progress=EvaluationProgressStore(
                 tmp_path / "evaluation-progress.json"
             ),
@@ -174,6 +212,59 @@ def test_quick_apply_returns_durable_task(
     assert runner.await_count <= 1
 
 
+def test_prepare_approved_application_queues_worker_task(
+    dashboard_api: tuple[TestClient, AsyncMock],
+) -> None:
+    client, _runner = dashboard_api
+    service = (
+        client.app.state.dashboard_dependencies
+        .approved_application_service
+    )
+
+    response = client.post(
+        "/api/jobs/quick-1/applications/prepare",
+    )
+
+    assert response.status_code == 202
+    assert response.json()["status"] == "queued"
+    service.queue.assert_called_once_with(
+        "quick-1",
+        account_alias="default",
+    )
+
+
+def test_confirm_approved_application_requires_explicit_action(
+    dashboard_api: tuple[TestClient, AsyncMock],
+) -> None:
+    client, _runner = dashboard_api
+
+    response = client.post(
+        "/api/approved-applications/approved-1/confirm",
+    )
+
+    assert response.status_code == 202
+    assert response.json()["status"] == "submitting"
+
+
+def test_apply_manual_handoff_returns_safe_material_links(
+    dashboard_api: tuple[TestClient, AsyncMock],
+) -> None:
+    client, _runner = dashboard_api
+
+    response = client.post(
+        "/api/jobs/apply-1/applications/manual-handoff",
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "execution_id": "manual-1",
+        "job_url": "https://hk.jobsdb.com/job/apply-1",
+        "resume_url": "/api/jobs/apply-1/approved-resume",
+        "cover_letter_text": "Approved cover letter.",
+    }
+    assert "/private/cv.pdf" not in response.text
+
+
 def test_dashboard_html_loads(
     dashboard_api: tuple[TestClient, AsyncMock],
 ) -> None:
@@ -204,6 +295,9 @@ def test_page_contains_review_and_safe_action_controls(
     assert 'id="evaluation-progress"' in html
     assert 'id="refresh-results"' in html
     assert "刷新评分结果" in html
+    assert "使用已批准材料准备申请" in html
+    assert "确认并提交申请" in html
+    assert "下载定制简历并人工投递" in html
 
 
 def test_material_preview_page_is_simplified_chinese(
