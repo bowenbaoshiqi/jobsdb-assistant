@@ -94,6 +94,8 @@ class Orchestrator:
         normalized_keyword = normalize_keyword(keyword)
         try:
             await self._init_browser()
+            if excluded_job_ids is None:
+                return await self._discover_loaded(normalized_keyword, limit)
             return await self._discover_loaded(
                 normalized_keyword,
                 limit,
@@ -117,10 +119,13 @@ class Orchestrator:
     ) -> dict:
         """Run discovery after browser and login initialization."""
         await self.page_controller.goto(build_search_url(keyword))
-        jobs = await self.scraper.get_search_jobs(
-            max_jobs=limit,
-            excluded_job_ids=excluded_job_ids,
-        )
+        if excluded_job_ids is None:
+            jobs = await self.scraper.get_search_jobs(max_jobs=limit)
+        else:
+            jobs = await self.scraper.get_search_jobs(
+                max_jobs=limit,
+                excluded_job_ids=excluded_job_ids,
+            )
         report = {
             "keyword": keyword,
             "found": len(jobs),
