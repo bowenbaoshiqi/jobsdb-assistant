@@ -133,7 +133,9 @@ class TypingSimulator:
 
         # 边界检查（画江湖的上限是 4 倍平均延迟）
         max_delay = self.base_delay * 4
-        delay = min(delay, max_delay)
+        # 先保护基础延迟下限,再叠加标点停顿。否则负高斯采样会抵消
+        # 句尾 0.3-0.8 秒的额外停顿,造成特征测试偶发失败。
+        delay = max(0.02, min(delay, max_delay))
 
         # 标点和格式字符的额外停顿
         if char in ".!?":

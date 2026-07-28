@@ -20,6 +20,9 @@ discover --keyword
 workflow evaluation-prepare
 workflow evaluation-submit
 workflow report
+workflow material-pending
+workflow material-submit
+workflow material-progress
 dashboard doctor
 dashboard start
 ```
@@ -44,9 +47,17 @@ Never recreate or edit the immutable private profile bundle.
 JobsDB discovery is public browser navigation and never uses credentials or
 login. Do not request password configuration during discovery.
 
-Do not modify integration checkouts, update fork revisions, combine scoring
-systems, or create application materials. Keep `dashboard start` in the
+Do not modify integration checkouts, update fork revisions, or combine scoring
+systems. Keep `dashboard start` in the
 foreground. Application execution is allowed only after the user's Dashboard confirmation:
 Quick Apply uses the JobsDB default CV with no cover letter, while Apply
 remains manual. The Agent must not call the application endpoint or confirm it
 on the user's behalf.
+
+For a Dashboard-created material batch, follow section 6 of the canonical
+skill. Process every `waiting_for_agent` task, submit each structured result
+through Python, continue other material tasks after an isolated failure, and
+use `workflow material-progress` after each result. Reviewer and ATS advice
+does not block the user's decision; factual claims must stay within the
+confirmed profile. v0.5 never applies to a job. Keep the Claude Code session
+active until all tasks are `generated` or `failed`.

@@ -3,18 +3,51 @@
 from pathlib import Path
 
 from config.settings import get_config
+from src.adapters.application_material import ApplicationMaterialAdapter
 from src.adapters.candidate_profile import CandidateProfileAdapter
 from src.adapters.career_ops_profile import CareerOpsProfileAdapter
 from src.adapters.checkpoint_io import CheckpointStore
 from src.adapters.job_evaluation import JobEvaluationAdapter
 from src.application.candidate_onboarding import CandidateOnboarding
 from src.application.evaluate_jobs import EvaluationService
+from src.application.generate_materials import MaterialGenerationService
 from src.application.workflow import CandidateEvaluationWorkflow
 from src.integrations.manager import IntegrationManager
 from src.integrations.manifest import load_manifest
 from src.storage.candidate_repository import CandidateRepository
 from src.storage.database import Database
 from src.storage.evaluation_repository import EvaluationRepository
+from src.storage.material_repository import MaterialRepository
+
+
+def build_material_generation_service(
+    project_root: Path | None = None,
+) -> MaterialGenerationService:
+    """Construct the pinned local v0.5 material-generation service."""
+    root = project_root or Path(__file__).resolve().parents[2]
+    manifest = load_manifest(root / "integrations" / "manifest.json")
+    database = Database(get_config().storage.database_path)
+    candidate_spec = manifest.integrations["candidate-profile"]
+    evaluation_spec = manifest.integrations["job-evaluation"]
+    material_spec = manifest.integrations["application-material"]
+    return MaterialGenerationService(
+        repository=MaterialRepository(database),
+        adapter=ApplicationMaterialAdapter(
+            material_spec.commit,
+            material_spec.contract_version,
+        ),
+        checkpoints=CheckpointStore(root / "workspace" / "ai-tasks"),
+        profile_projector=CareerOpsProfileAdapter(
+            workspace_root=root / "workspace" / "career-ops-profiles",
+            candidate_integration_commit=candidate_spec.commit,
+            career_ops_integration_commit=evaluation_spec.commit,
+            forbidden_roots=(
+                root / "integrations" / "candidate-profile",
+                root / "integrations" / "job-evaluation",
+            ),
+        ),
+        materials_root=root / "workspace" / "materials",
+    )
 
 
 def build_workflow(

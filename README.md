@@ -1,12 +1,12 @@
 # JobsDB Assistant
 
-当前开发版本：`v0.4.0`。新产品基于上游 JobsDB 自动投递引擎 v2.0
+当前开发版本：`v0.5.0`。新产品基于上游 JobsDB 自动投递引擎 v2.0
 构建；历史 `v2.0-phase*` 标签仅代表上游引擎的重构阶段。
 
-`v0.4.0` 在候选人画像和 career-ops 原生 A–F、1.0–5.0 职位评分之上，
-增加仅监听本机的审核 Dashboard。用户可以检查评分过程、勾选后续材料职位，
-或者对单个 Quick Apply 职位使用 JobsDB default CV、no cover letter
-直接投递。Apply 职位只打开详情页，由用户人工继续。
+`v0.5.0` 在候选人画像、career-ops 原生 A–F 职位评分和本地 Dashboard
+之上，增加每个已选职位独立的英文定制简历 PDF 与英文求职信。材料可预览、
+批准、拒绝或重新生成；Reviewer 与 ATS 只提供建议，事实一致性警告必须由
+用户明确处理。v0.5 不会提交职位申请，批准后的材料留给下一个版本执行投递。
 
 所有候选人资料、JD、定制简历、求职信、cookies、浏览器 profile、SQLite、
 日志和截图只保存在本地忽略目录，CI 不上传任何运行时 artifact。
@@ -69,7 +69,8 @@ uv run python -m src.main workflow report
 ```
 
 包含简历、画像、JD 和 AI 结果的检查点保存在忽略的
-`workspace/ai-tasks/`。v0.3 不生成定制简历/求职信，也不从评分流程执行投递。
+`workspace/ai-tasks/`。评分阶段不会生成申请材料或执行投递；材料只在用户
+通过 Dashboard 选定职位后生成。
 单份简历首次导入不能直接生成画像提案：必须先回答或明确跳过全部必问维度，
 Python 才允许 Agent 提交画像。
 
@@ -107,12 +108,34 @@ Dashboard 默认只显示已评分职位，也可切换到全部职位查看
 evidence、Profile/JD/engine 版本溯源；页面不会自行补造逐条 Profile
 判定。
 
-每个职位可立即勾选或取消，状态保存在本地 SQLite：
+每个职位可立即勾选或取消，状态保存在本地 SQLite。选择一个或多个职位后，
+点击“为已选职位生成定制材料”，Python 会为每个职位创建独立任务：
 
 - **Quick Apply**：可以选择等待后续材料，也可以在明确确认后直接使用
   **JobsDB default CV**、**no cover letter** 投递当前单个职位。
 - **Apply**：只提供打开 JobsDB 职位详情的入口，由用户找到企业网站并人工投递。
-- “Tailored materials” 在 v0.4 只显示为后续版本能力，不会生成或修改简历。
+- **定制材料**：每个职位独立生成一份英文简历 PDF 和一封 100–300 个英文
+  单词的求职信；选择五个职位会得到五套互不覆盖的材料。
+
+当前 CC/Codex Agent 会话通过以下稳定 Python 协议逐个处理材料任务：
+
+```bash
+uv run python -m src.main workflow material-pending
+uv run python -m src.main workflow material-submit --task-id TASK_ID --result RESULT_JSON
+uv run python -m src.main workflow material-progress --batch-id BATCH_ID
+```
+
+材料保存在私有的 `workspace/materials/<job-id>/v<version>/`。预览页展示 PDF、
+求职信、修改摘要、Reviewer 建议、ATS 建议和事实一致性检查：
+
+- Reviewer 与 ATS 只展示建议，不阻塞批准。
+- 发现疑似虚构内容时材料仍保留，但标记为事实风险；用户可拒绝、重新生成，
+  或勾选事实风险覆盖后批准。
+- 拒绝不会删除材料；重新生成会创建不可变的 N+1 版本并保留历史。
+- 只有用户批准的版本才标记为可供下一个版本执行投递。
+
+v0.5 不会提交职位申请。Quick Apply 的定制材料自动投递，以及 Apply 的人工
+材料交接，均属于下一个版本。
 
 直接 Quick Apply 复用原有浏览器状态机、登录态、频率限制和申请历史。同一时间
 只允许一个任务；验证码、登录失效或复杂表单会转为人工处理。点击前确认框会明确
@@ -186,6 +209,17 @@ uv run python scripts/privacy_guard.py
 
 ## 📝 更新日志
 
+### v0.5.0 (2026-07-27) — Tailored Materials
+
+- 多职位批量创建、每职位独立且可恢复的材料任务
+- 固定 `ai-job-search` fork 能力的 schema-bound Adapter，不修改上游代码
+- 每职位英文定制简历 PDF 与 100–300 词英文求职信
+- Reviewer、ATS、事实一致性检查及简体中文 Dashboard 反馈
+- PDF/求职信预览、下载/复制、批准、拒绝、事实风险覆盖和 N+1 重新生成
+- 私有文件哈希、路径逃逸/软链接/伪 PDF 防护和不可变版本安装
+- CC/Codex 前台 Agent 工作流；单任务失败隔离，Python/SQLite 为状态权威
+- 明确边界：v0.5 不执行职位投递
+
 ### v0.4.0 (2026-07-27) — Review Dashboard
 
 - FastAPI + Jinja2 + Vanilla JS 本地审核界面，仅监听 `127.0.0.1`
@@ -253,11 +287,12 @@ uv run python scripts/privacy_guard.py
 ```
 src/
 ├── adapters/    # ai-job-search / career-ops schema-bound 检查点
-├── application/ # 候选人画像、增量评分和 v0.3 主流程
+├── application/ # 候选人画像、增量评分和材料生成主流程
 ├── browser/     # 浏览器抽象层(ports / fake / playwright 实现 / stealth)
-├── domain/      # 画像、JD、原生 A–F 评分契约
+├── domain/      # 画像、JD、原生 A–F 评分与材料契约
 ├── integrations/# 固定 fork manifest 与只读校验
 ├── jobsdb/      # JobsDB 交互(apply 状态机、login、selectors)
+├── materials/   # 私有材料校验与不可变安装
 ├── reporting/   # 本地安全评分报告
 ├── simulation/  # 人类行为模拟(鼠标 Bezier、拟人打字)
 ├── scheduler/   # 频率控制与队列

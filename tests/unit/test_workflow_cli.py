@@ -57,6 +57,43 @@ class FakeWorkflow:
         return "JobsDB Evaluation Report (1 jobs)"
 
 
+class FakeMaterialService:
+    def __init__(self):
+        self.repository = SimpleNamespace(
+            list_pending=lambda: [
+                SimpleNamespace(
+                    id="material-task-1",
+                    batch_id="batch-1",
+                    job_id="job-1",
+                    target_version=1,
+                    status=SimpleNamespace(value="waiting_for_agent"),
+                    error_message=None,
+                )
+            ],
+            list_batch=lambda batch_id: [
+                SimpleNamespace(
+                    id="material-task-1",
+                    batch_id=batch_id,
+                    job_id="job-1",
+                    target_version=1,
+                    status=SimpleNamespace(value="generated"),
+                    error_message=None,
+                )
+            ],
+        )
+
+    def load_pending(self, task_id):
+        return SimpleNamespace(task=SimpleNamespace(task_id=task_id))
+
+    def submit(self, pending, payload, *, completed_at):
+        return SimpleNamespace(
+            id="package-1",
+            job_id="job-1",
+            version=1,
+            review_status=SimpleNamespace(value="pending_review"),
+        )
+
+
 def test_profile_prepare_prints_machine_readable_checkpoint(
     monkeypatch,
 ) -> None:
@@ -169,3 +206,61 @@ def test_agent_protocol_uses_native_profile_loading_order() -> None:
         assert "profile_context_paths" in instructions
         assert expected in instructions
         assert "embedded confirmed profile" not in instructions
+
+
+def test_material_pending_and_progress_are_machine_readable(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "src.main._build_material_generation_service",
+        FakeMaterialService,
+    )
+
+    pending = runner.invoke(app, ["workflow", "material-pending"])
+    progress = runner.invoke(
+        app,
+        ["workflow", "material-progress", "--batch-id", "batch-1"],
+    )
+
+    assert pending.exit_code == 0
+    assert json.loads(pending.stdout)["pending"][0]["task_id"] == (
+        "material-task-1"
+    )
+    assert progress.exit_code == 0
+    assert json.loads(progress.stdout)["counts"] == {"generated": 1}
+
+
+def test_material_submit_reads_result_and_reports_review_state(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        "src.main._build_material_generation_service",
+        FakeMaterialService,
+    )
+    result_file = tmp_path / "result.json"
+    result_file.write_text(
+        json.dumps({"task_id": "material-task-1"}),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "workflow",
+            "material-submit",
+            "--task-id",
+            "material-task-1",
+            "--result",
+            str(result_file),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == {
+        "status": "saved",
+        "package_id": "package-1",
+        "job_id": "job-1",
+        "material_version": 1,
+        "review_status": "pending_review",
+    }

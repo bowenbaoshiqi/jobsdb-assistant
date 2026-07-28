@@ -20,7 +20,14 @@ def test_skill_uses_python_as_state_authority(path: Path) -> None:
     assert "workflow evaluation-prepare" in text
     assert "workflow evaluation-submit" in text
     assert "workflow report" in text
+    assert "workflow material-pending" in text
+    assert "workflow material-submit" in text
+    assert "workflow material-progress" in text
     assert "Python and SQLite are the state authority" in text
+    assert "v0.5 never applies" in text
+    assert "API key" not in text
+    assert "continue other material tasks" in text
+    assert "waiting_for_agent" in text
     assert "git pull" not in text
     assert "codex exec" not in text
     assert "claude -p" not in text

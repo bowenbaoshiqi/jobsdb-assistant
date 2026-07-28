@@ -2,6 +2,30 @@
 
 本项目遵循 [语义化版本](https://semver.org/)。
 
+## [v0.5.0] — 2026-07-27 — Tailored Materials
+
+- Added one resumable, failure-isolated generation task and one immutable
+  material package per selected JobsDB job.
+- Added a pinned, schema-bound application-material adapter over the existing
+  ai-job-search fork without changing the fork.
+- Added English tailored CV PDF and 100–300-word English cover letter output.
+- Added advisory Reviewer and ATS findings plus explicit factual-consistency
+  warnings that users may reject, regenerate, or consciously override.
+- Added safe PDF/text staging, hashing, path containment, symlink rejection,
+  atomic installation, and immutable N+1 version history.
+- Added a Simplified-Chinese local preview and review UI with PDF preview,
+  cover-letter copy, approval, rejection, and regeneration.
+- Added Python-owned CC/Codex task listing, result submission, and progress
+  reporting with isolated failures.
+- Kept all application submission outside v0.5.
+
+## [v0.4.0] — 2026-07-27 — Review Dashboard
+
+- Added the loopback-only FastAPI/Jinja2/vanilla-JavaScript review Dashboard.
+- Added persisted job selection, native A–F trace views, manual refresh, and
+  direct default-CV Quick Apply confirmation.
+- Kept Apply jobs manual and preserved the existing browser state machine.
+
 ## [v0.3.0] — 2026-07-24 — Candidate & Evaluation
 
 - Added fixed-SHA public-fork integration locks for ai-job-search and

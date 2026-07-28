@@ -7,6 +7,7 @@ Provides command line interface for controlling the job application assistant.
 import json
 import os
 import shutil
+from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Optional
@@ -46,6 +47,12 @@ def _build_candidate_evaluation_workflow():
     from src.application.runtime import build_workflow
 
     return build_workflow()
+
+
+def _build_material_generation_service():
+    from src.application.runtime import build_material_generation_service
+
+    return build_material_generation_service()
 
 
 def _print_json(payload: dict) -> None:
@@ -176,6 +183,69 @@ def workflow_evaluation_submit(
 def workflow_report() -> None:
     """输出当前画像版本对应的完整评分报告。"""
     typer.echo(_build_candidate_evaluation_workflow().report())
+
+
+def _material_task_payload(task) -> dict:
+    return {
+        "task_id": task.id,
+        "batch_id": task.batch_id,
+        "job_id": task.job_id,
+        "material_version": task.target_version,
+        "status": task.status.value,
+        "error_message": task.error_message,
+    }
+
+
+@workflow_app.command("material-pending")
+def workflow_material_pending() -> None:
+    """列出所有等待当前 Agent 处理的材料任务。"""
+    service = _build_material_generation_service()
+    _print_json({
+        "pending": [
+            _material_task_payload(item)
+            for item in service.repository.list_pending()
+        ]
+    })
+
+
+@workflow_app.command("material-submit")
+def workflow_material_submit(
+    task_id: str = typer.Option(..., "--task-id"),
+    result: Path = typer.Option(..., "--result"),  # noqa: B008
+) -> None:
+    """校验并保存一个职位的定制简历和求职信结果。"""
+    service = _build_material_generation_service()
+    payload = json.loads(result.read_text(encoding="utf-8"))
+    package = service.submit(
+        service.load_pending(task_id),
+        payload,
+        completed_at=datetime.now(UTC),
+    )
+    _print_json({
+        "status": "saved",
+        "package_id": package.id,
+        "job_id": package.job_id,
+        "material_version": package.version,
+        "review_status": package.review_status.value,
+    })
+
+
+@workflow_app.command("material-progress")
+def workflow_material_progress(
+    batch_id: str = typer.Option(..., "--batch-id"),
+) -> None:
+    """输出一个材料批次的稳定任务进度。"""
+    tasks = (
+        _build_material_generation_service()
+        .repository.list_batch(batch_id)
+    )
+    counts = Counter(item.status.value for item in tasks)
+    _print_json({
+        "batch_id": batch_id,
+        "total": len(tasks),
+        "counts": dict(sorted(counts.items())),
+        "tasks": [_material_task_payload(item) for item in tasks],
+    })
 
 
 @dashboard_app.command("doctor")

@@ -83,7 +83,8 @@ p {
 
 .selected-summary {
   display: grid;
-  min-width: 8rem;
+  gap: 0.35rem;
+  min-width: 15rem;
   text-align: right;
 }
 
@@ -197,6 +198,26 @@ p {
   display: grid;
   gap: 1rem;
   margin-top: 1rem;
+}
+
+.material-batch {
+  margin: 1rem 0;
+  border: 1px solid #8ca9e4;
+  border-radius: 0.55rem;
+  padding: 0.8rem;
+  background: #edf3ff;
+}
+
+.material-batch span {
+  display: block;
+  margin-top: 0.25rem;
+  color: #46536a;
+}
+
+.material-state {
+  align-self: center;
+  color: #62708a;
+  font-weight: 650;
 }
 
 .job-card {

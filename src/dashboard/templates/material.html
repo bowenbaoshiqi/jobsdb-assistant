@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>定制申请材料 · JobsDB 求职助手</title>
+    <link rel="stylesheet" href="/static/material.css">
+    <script src="/static/material.js" defer></script>
+  </head>
+  <body data-package-id="{{ package_id }}">
+    <main class="material-shell">
+      <header class="material-header">
+        <div>
+          <a href="/">← 返回职位列表</a>
+          <p class="eyebrow">定制申请材料</p>
+          <h1 id="material-title">正在加载…</h1>
+          <p id="material-meta" class="muted"></p>
+        </div>
+        <div id="review-status" class="status-badge">读取状态</div>
+      </header>
+
+      <p id="material-error" class="error" role="alert" hidden></p>
+      <p id="material-message" class="message" aria-live="polite"></p>
+
+      <section id="fact-warning" class="fact-warning" hidden>
+        <h2>发现疑似虚构或未经证实的内容</h2>
+        <p>材料仍可查看，但默认不标记为可用。请拒绝、重新生成，或明确确认后批准。</p>
+        <ul id="fact-findings"></ul>
+      </section>
+
+      <section class="preview-grid">
+        <article class="panel resume-panel">
+          <div class="panel-heading">
+            <h2>英文定制简历 PDF</h2>
+            <a id="resume-download" class="button-link" download>下载 PDF</a>
+          </div>
+          <iframe id="resume-preview" title="英文定制简历 PDF 预览"></iframe>
+        </article>
+
+        <article class="panel cover-panel">
+          <div class="panel-heading">
+            <h2>英文求职信</h2>
+            <button id="copy-cover-letter" type="button">复制求职信</button>
+          </div>
+          <p id="cover-letter-count" class="muted"></p>
+          <pre id="cover-letter-preview"></pre>
+        </article>
+      </section>
+
+      <section class="checks-grid">
+        <article class="panel">
+          <h2>Reviewer 建议</h2>
+          <ul id="reviewer-findings"></ul>
+        </article>
+        <article class="panel">
+          <h2>ATS 建议</h2>
+          <ul id="ats-findings"></ul>
+        </article>
+        <article class="panel">
+          <h2>事实一致性检查</h2>
+          <ul id="facts-check-findings"></ul>
+        </article>
+      </section>
+
+      <section class="panel review-panel">
+        <h2>人工审核</h2>
+        <label id="fact-override-row" class="override" hidden>
+          <input id="fact-override" type="checkbox">
+          我确认覆盖事实风险警告
+        </label>
+        <label>
+          反馈（拒绝或重新生成时可填写）
+          <textarea id="review-feedback" maxlength="2000" rows="4"></textarea>
+        </label>
+        <div class="review-actions">
+          <button id="approve-material" type="button" class="primary">批准材料</button>
+          <button id="reject-material" type="button">标记不通过</button>
+          <button id="regenerate-material" type="button">重新生成</button>
+        </div>
+        <p class="muted">Reviewer 和 ATS 仅提供建议，不阻塞人工批准。本版本不会自动投递。</p>
+      </section>
+
+      <section class="panel">
+        <h2>版本历史</h2>
+        <ul id="version-history"></ul>
+      </section>
+    </main>
+  </body>
+</html>

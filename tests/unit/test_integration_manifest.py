@@ -32,6 +32,19 @@ def test_manifest_locks_approved_forks_and_required_capabilities() -> None:
     assert "modes/_shared.md" in evaluation.required_paths
     assert "modes/oferta.md" in evaluation.required_paths
 
+    materials = manifest.integrations["application-material"]
+    assert materials.url == candidate.url
+    assert materials.commit == candidate.commit
+    assert materials.contract_version == "application-material.v1"
+    assert (
+        ".claude/skills/job-application-assistant/05-cv-templates.md"
+        in materials.required_paths
+    )
+    assert (
+        ".claude/skills/job-application-assistant/06-cover-letter-templates.md"
+        in materials.required_paths
+    )
+
 
 def test_manifest_rejects_unapproved_owner(tmp_path: Path) -> None:
     path = tmp_path / "manifest.json"

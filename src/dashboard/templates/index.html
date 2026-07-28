@@ -17,6 +17,9 @@
         <div class="selected-summary">
           <strong id="selected-count">0</strong>
           <span>个职位已选择</span>
+          <button id="generate-materials" type="button" class="primary" disabled>
+            为已选职位生成定制材料
+          </button>
         </div>
       </header>
 
@@ -80,6 +83,10 @@
 
       <p id="dashboard-error" class="error" role="alert" hidden></p>
       <p id="dashboard-status" class="sr-only" aria-live="polite"></p>
+      <section id="material-batch-status" class="material-batch" hidden>
+        <strong>材料生成任务已创建</strong>
+        <span id="material-batch-note"></span>
+      </section>
       <section id="job-list" class="job-list" aria-label="职位列表"></section>
 
       <dialog id="apply-confirmation">
@@ -104,7 +111,7 @@
       <template id="future-actions">
         <button>使用默认简历直接投递</button>
         <a>打开职位并人工投递</a>
-        <button disabled>定制申请材料（后续版本）</button>
+        <button>为已选职位生成定制材料</button>
       </template>
     </main>
   </body>

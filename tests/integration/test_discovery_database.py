@@ -107,7 +107,7 @@ def test_discovery_migration_is_applied_once(tmp_path) -> None:
             row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()
         }
 
-    assert versions == [(1,), (2,), (3,), (4,)]
+    assert versions == [(1,), (2,), (3,), (4,), (5,)]
     assert {
         "apply_type",
         "first_seen",

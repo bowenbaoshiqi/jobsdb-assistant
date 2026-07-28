@@ -23,6 +23,7 @@ from src.storage.models import (
 )
 from src.storage.v03_migration import add_v03_schema
 from src.storage.v04_migration import add_v04_schema
+from src.storage.v05_migration import add_v05_schema
 
 
 def _mark_legacy_schema(_conn: sqlite3.Connection) -> None:
@@ -107,6 +108,11 @@ class Database:
                     4,
                     "v0.4 dashboard schema",
                     add_v04_schema,
+                ),
+                Migration(
+                    5,
+                    "v0.5 tailored material schema",
+                    add_v05_schema,
                 ),
             ]
         )
