@@ -4,12 +4,25 @@ from unittest.mock import MagicMock, Mock
 
 from typer.testing import CliRunner
 
+from config.settings import AppConfig
 from src.dashboard import cli
 from src.dashboard.cli import CheckState, run_dashboard_doctor
 from src.main import app
 from src.storage.database import Database
 
 runner = CliRunner()
+
+
+def test_discovery_config_is_headless_without_mutating_application_config() -> None:
+    config = AppConfig(_env_file=None)
+    config.browser.headless = False
+
+    discovery = cli._headless_discovery_config(config)
+
+    assert discovery is not config
+    assert discovery.browser is not config.browser
+    assert discovery.browser.headless is True
+    assert config.browser.headless is False
 
 
 def test_start_binds_only_loopback(monkeypatch) -> None:
