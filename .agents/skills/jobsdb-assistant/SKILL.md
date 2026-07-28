@@ -3,7 +3,7 @@ name: jobsdb-assistant
 description: Run the local JobsDB Hong Kong candidate-profile, job-evaluation, and review Dashboard workflow. Use when the user asks to initialize or update their candidate profile, discover JobsDB roles for one keyword, score current roles with native career-ops A-F evaluation, generate the local evaluation report, or open the local review Dashboard. Keep the current Codex or compatible agent session active until Python reports completion.
 ---
 
-# JobsDB Candidate, Evaluation, and Material Workflow
+# JobsDB Candidate, Evaluation, Material, and Application Workflow
 
 Python and SQLite are the state authority. Do not choose or skip workflow
 stages. Do not modify either integration checkout.
@@ -173,7 +173,7 @@ Keep the foreground Agent session active until the user stops the service or
 the command exits. Report the local `127.0.0.1` address. Do not replace the
 foreground service with a detached schedule or a public/LAN binding.
 
-The Dashboard is the human approval surface. The Agent must not click or call the Quick Apply endpoint on the user's behalf.
+The Dashboard is the human approval surface. The Agent must not click or call the Quick Apply endpoint on the user's behalf and must not confirm submission for the user.
 A direct Quick Apply requires the user to use the Dashboard confirmation;
 that path uses the JobsDB default CV and no cover letter. It does not tailor
 a CV, generate a cover letter, or create a material task.
@@ -187,7 +187,8 @@ the user reviews scoring evidence, changes filters, or selects
 
 When the user creates a material batch in the Dashboard, remain in the
 current Agent session until every task reaches `generated` or `failed`.
-v0.5 never applies to a job and never calls the Quick Apply endpoint.
+v0.6 application execution is available only through explicit user actions in
+the Dashboard; the Agent never invokes prepare or confirm endpoints.
 
 List work owned by Python:
 
@@ -203,8 +204,11 @@ For every `waiting_for_agent` task:
 3. Read the task's three `profile_context_paths`, single JD, and native A-F
    evaluation. Treat the confirmed profile and source CV as the only factual
    sources.
-4. Create an English tailored CV PDF and an English 100–300-word cover
-   letter under `workspace/ai-tasks/<task_id>/staging/`.
+4. Produce only the structured English replacement content requested by the
+   task: `Professional Summary`, exactly four `Career Highlights`, exactly
+   three `Core Competencies`, and a 100–300-word cover letter. Python alone
+   renders the PDF from the fixed v5 template. Never rewrite Work Experience
+   or any later section and never return an Agent-created PDF.
 5. Run Reviewer, ATS, and factual checks in that exact order. Reviewer and
    ATS are advisory. Report check and change summaries in Simplified Chinese.
 6. Write a schema-valid result matching the task identity to
@@ -231,3 +235,20 @@ uv run python -m src.main workflow material-progress --batch-id BATCH_ID
 The first profile workflow installs missing pinned integrations only on a
 genuine first run. On later runs, reuse the existing locked checkouts and
 immutable confirmed profile unless the user explicitly requests an update.
+
+## 7. Approved application execution
+
+Keep `dashboard start` in the foreground. After the user approves materials,
+Python owns the v0.6 application execution state, remote resume replacement,
+exact filename verification, cover-letter entry, and browser flow.
+
+- For Quick Apply, the user clicks prepare. Python deletes all remote JobsDB
+  resumes, uploads exactly the approved job-specific PDF, fills its matching
+  cover letter, and stops at Review.
+- The user must inspect Review and click confirm submission. The Agent must
+  not confirm submission, call the endpoint, or simulate that approval.
+- For Apply, the Dashboard provides the approved PDF, cover-letter copy, and
+  JobsDB detail URL. External employer-site submission remains manual.
+- Keep the Agent and Dashboard process alive until work finishes or the user
+  stops it. Report durable states and intervention errors without retrying an
+  uncertain submission.
