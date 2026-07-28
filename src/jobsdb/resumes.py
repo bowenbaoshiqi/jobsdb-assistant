@@ -156,7 +156,7 @@ class RemoteResumeManager:
         default: RemoteResumeRecord,
         remote_name: str,
     ) -> list[RemoteResumeRecord]:
-        for _ in range(20):
+        for _ in range(60):
             records = await self._list_records()
             if any(item.filename == remote_name for item in records):
                 return records
