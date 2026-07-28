@@ -135,6 +135,33 @@ def test_task_binds_all_immutable_inputs_and_language_contract(
     assert len(task.source_cv_hash) == 64
 
 
+def test_task_uses_configured_pdf_template_not_career_ops_markdown(
+    tmp_path: Path,
+) -> None:
+    profile, bundle, snapshot, evaluation = _inputs(tmp_path)
+    markdown = tmp_path / "cv.md"
+    markdown.write_text("# Career Ops CV", encoding="utf-8")
+    bundle = bundle.model_copy(update={"cv_path": markdown})
+    template = tmp_path / "resume-template.pdf"
+    template.write_bytes((tmp_path / "cv.pdf").read_bytes())
+    adapter = ApplicationMaterialAdapter(
+        COMMIT,
+        "application-material.v1",
+        resume_template_path=template,
+    )
+
+    task = adapter.build_task(
+        task_id="task-1",
+        material_version=1,
+        profile=profile,
+        bundle=bundle,
+        snapshot=snapshot,
+        evaluation=evaluation,
+    )
+
+    assert task.source_cv_path == str(template.resolve())
+
+
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [
