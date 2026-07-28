@@ -241,6 +241,10 @@ class MaterialGenerationService:
             task.material_mode
             is MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
         ):
+            if result.tailored_sections is None:
+                raise ValueError(
+                    "tailored sections are required for resume rendering"
+                )
             source = Path(task.source_cv_path).resolve()
             if (
                 not source.is_file()
@@ -305,7 +309,9 @@ class MaterialGenerationService:
                 "resume_template_id": task.resume_template_id,
                 "tailored_sections": result.tailored_sections.model_dump(
                     mode="json"
-                ),
+                )
+                if result.tailored_sections is not None
+                else None,
                 "layout": layout_manifest,
                 "engine_provenance": result.engine_provenance,
                 "prompt_provenance": result.prompt_provenance,

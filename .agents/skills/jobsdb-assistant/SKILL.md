@@ -228,15 +228,20 @@ For every `waiting_for_agent` task:
 3. Read the task's three `profile_context_paths`, single JD, and native A-F
    evaluation. Treat the confirmed profile and source CV as the only factual
    sources.
-4. Produce only the structured English replacement content requested by the
-   task: `Professional Summary`, exactly four `Career Highlights`, exactly
-   three `Core Competencies`, and a 100–300-word cover letter. Python alone
-   renders the PDF from the fixed v5 template. Never rewrite Work Experience
-   or any later section and never return an Agent-created PDF.
+4. Branch only on the task's `material_mode`:
+   - `cover_letter_only`: produce only a 100–300-word English cover letter.
+     Do not generate `tailored_sections` or a PDF.
+   - `tailored_resume_and_cover_letter`: produce `Professional Summary`,
+     exactly four `Career Highlights`, exactly three `Core Competencies`,
+     and a 100–300-word English cover letter. Python alone renders the PDF
+     from the fixed v5 template.
+   Never rewrite Work Experience or any later section and never return an
+   Agent-created PDF.
 5. Run Reviewer, ATS, and factual checks in that exact order. Reviewer and
    ATS are advisory. Report check and change summaries in Simplified Chinese.
 6. Write a schema-valid result matching the task identity to
-   `workspace/ai-tasks/<task_id>/agent-result.json`.
+   `workspace/ai-tasks/<task_id>/agent-result.json`. Always copy the task's
+   `material_mode` into the result unchanged.
 7. Submit only through Python:
 
 ```bash
@@ -266,13 +271,17 @@ Keep `dashboard start` in the foreground. After the user approves materials,
 Python owns the v0.6 application execution state, remote resume replacement,
 exact filename verification, cover-letter entry, and browser flow.
 
-- For Quick Apply, the user clicks prepare. Python deletes all remote JobsDB
-  resumes, uploads exactly the approved job-specific PDF, fills its matching
-  cover letter, and stops at Review.
+- For Quick Apply, the user clicks prepare. `cover_letter_only` keeps the
+  JobsDB default resume and skips all remote resume management.
+  `tailored_resume_and_cover_letter` preserves the default resume, removes
+  other non-default resumes, uploads the approved job-specific PDF, and
+  selects it. Both modes fill the approved cover letter and stop at Review.
 - The user must inspect Review and click confirm submission. The Agent must
   not confirm submission, call the endpoint, or simulate that approval.
-- For Apply, the Dashboard provides the approved PDF, cover-letter copy, and
-  JobsDB detail URL. External employer-site submission remains manual.
+- For Apply, the Dashboard copies the approved cover letter and opens the
+  JobsDB detail URL. Full mode also downloads the approved PDF; cover-only
+  mode keeps the JobsDB default resume. External employer-site submission
+  remains manual.
 - Keep the Agent and Dashboard process alive until work finishes or the user
   stops it. Report durable states and intervention errors without retrying an
   uncertain submission.

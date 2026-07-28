@@ -59,9 +59,12 @@ skill. Process every `waiting_for_agent` task, submit each structured result
 through Python, continue other material tasks after an isolated failure, and
 use `workflow material-progress` after each result. Reviewer and ATS advice
 does not block the user's decision; factual claims must stay within the
-confirmed profile. Generate only `Professional Summary`, exactly four
-`Career Highlights`, exactly three `Core Competencies`, and the 100–300-word
-cover letter; Python renders the fixed-template PDF.
+confirmed profile. Copy the task's `material_mode` into every result. For
+`cover_letter_only`, generate only the 100–300-word cover letter and omit
+`tailored_sections`. For `tailored_resume_and_cover_letter`, generate
+`Professional Summary`, exactly four `Career Highlights`, exactly three
+`Core Competencies`, and the cover letter; Python renders the fixed-template
+PDF.
 
 v0.6 application execution follows section 7 of the canonical skill. Keep the
 Claude Code session active with the Dashboard, but must not confirm submission

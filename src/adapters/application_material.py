@@ -52,7 +52,7 @@ class ApplicationMaterialTask(BaseModel):
     source_cv_path: str
     source_cv_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
     resume_template_id: Literal["bowen-v5"] = "bowen-v5"
-    tailored_section_names: tuple[str, str, str] = (
+    tailored_section_names: tuple[str, ...] = (
         "professional_summary",
         "career_highlights",
         "core_competencies",
@@ -78,7 +78,7 @@ class ApplicationMaterialResult(BaseModel):
         MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
     )
     source_cv_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
-    tailored_sections: TailoredResumeSections
+    tailored_sections: TailoredResumeSections | None = None
     cover_letter_path: str = Field(min_length=1)
     cover_letter_text: str = Field(min_length=1)
     cover_letter_word_count: int = Field(ge=100, le=300)
@@ -92,6 +92,18 @@ class ApplicationMaterialResult(BaseModel):
 
     @model_validator(mode="after")
     def validate_generated_content(self) -> ApplicationMaterialResult:
+        full = (
+            self.material_mode
+            is MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+        )
+        if full and self.tailored_sections is None:
+            raise ValueError(
+                "tailored sections are required for full material mode"
+            )
+        if not full and self.tailored_sections is not None:
+            raise ValueError(
+                "cover-letter-only result must not contain tailored sections"
+            )
         if self.check_order != ["reviewer", "ats", "facts"]:
             raise ValueError("checks must be ordered reviewer, ats, facts")
         actual_words = len(self.cover_letter_text.split())
@@ -187,10 +199,23 @@ class ApplicationMaterialAdapter:
             material_mode=material_mode,
             source_cv_path=str(source_cv),
             source_cv_hash=source_hash,
+            tailored_section_names=(
+                (
+                    "professional_summary",
+                    "career_highlights",
+                    "core_competencies",
+                )
+                if material_mode
+                is MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+                else ()
+            ),
             region_line_budgets={
                 region.name: region.maximum_lines
                 for region in template.regions
-            },
+            }
+            if material_mode
+            is MaterialMode.TAILORED_RESUME_AND_COVER_LETTER
+            else {},
             feedback=feedback,
         )
 

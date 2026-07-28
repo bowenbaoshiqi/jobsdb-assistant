@@ -14,7 +14,7 @@ NOW = datetime(2026, 7, 27, tzinfo=UTC)
 
 def _valid_result(task, cover: Path) -> dict:
     text = " ".join(["word"] * 120)
-    return {
+    result = {
         "task_id": task.task_id,
         "integration_id": task.integration_id,
         "integration_commit": task.integration_commit,
@@ -45,6 +45,9 @@ def _valid_result(task, cover: Path) -> dict:
         "engine_provenance": {"engine": "Codex"},
         "prompt_provenance": {"version": "v1"},
     }
+    if task.material_mode is MaterialMode.COVER_LETTER_ONLY:
+        result.pop("tailored_sections")
+    return result
 
 
 def test_submit_restart_and_regenerate_preserve_immutable_versions(
