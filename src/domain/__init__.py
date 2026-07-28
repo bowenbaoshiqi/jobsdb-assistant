@@ -1,6 +1,12 @@
 """Stable public domain contracts."""
 
 from src.domain.application import ApplicationStatus
+from src.domain.application_execution import (
+    ApplicationExecution,
+    ApplicationExecutionEvent,
+    ApplicationExecutionStatus,
+    ApplicationIdentity,
+)
 from src.domain.candidate import (
     CandidateProfile,
     CandidateProfileProposal,
@@ -42,6 +48,10 @@ from src.domain.material import (
 __all__ = [
     "ApplicationPackage",
     "ApplicationStatus",
+    "ApplicationExecution",
+    "ApplicationExecutionEvent",
+    "ApplicationExecutionStatus",
+    "ApplicationIdentity",
     "ApplyType",
     "CandidateProfile",
     "CandidateProfileProposal",
