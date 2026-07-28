@@ -9,6 +9,7 @@ from src.jobsdb.resumes import (
 )
 from src.jobsdb.selectors import (
     PROFILE_ADD_RESUME,
+    PROFILE_FIRST_RESUME_OPTIONS,
     PROFILE_RESUME_DELETE,
 )
 
@@ -36,8 +37,6 @@ class ResumePage:
             raise AssertionError("resume management must be opened first")
         if "JBA_LIST_RESUMES" in expression:
             return list(self.names)
-        if "JBA_OPEN_FIRST_RESUME_OPTIONS" in expression:
-            return bool(self.names) and not self.refuse_delete
         raise AssertionError(expression)
 
     async def is_visible(self, selector: str) -> bool:
@@ -46,6 +45,9 @@ class ResumePage:
     async def click(self, selector: str, timeout: float = 30.0) -> None:
         if selector == PROFILE_ADD_RESUME:
             self.management_open = True
+        elif selector == PROFILE_FIRST_RESUME_OPTIONS:
+            if self.refuse_delete or not self.names:
+                raise RuntimeError("no resume options")
         elif selector == PROFILE_RESUME_DELETE and self.names:
             self.names.pop(0)
 
