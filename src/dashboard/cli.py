@@ -160,8 +160,10 @@ def build_production_app():
     database = Database(config.storage.database_path)
 
     account = AccountRegistry().resolve_active(
-        allow_placeholder=(config.login.mode == "manual"),
+        allow_placeholder=True,
     )
+    if not account.email:
+        config.login.mode = "manual"
     database.set_account(account.alias)
 
     async def run_one(job_id: str) -> dict:
