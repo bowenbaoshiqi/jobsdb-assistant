@@ -138,6 +138,56 @@ def test_evaluation_progress_endpoint_reports_current_batch(
     assert response.json()["queued"] == 2
 
 
+def test_backfill_all_appends_every_pending_job(
+    dashboard_api: tuple[TestClient, AsyncMock],
+) -> None:
+    client, _runner = dashboard_api
+
+    first = client.post(
+        "/api/evaluation-backfill",
+        params={"scope": "all"},
+    )
+    repeated = client.post(
+        "/api/evaluation-backfill",
+        params={"scope": "all"},
+    )
+
+    assert first.status_code == 200
+    assert first.json()["appended"] == 2
+    assert first.json()["progress"]["queued"] == 2
+    assert repeated.status_code == 200
+    assert repeated.json()["appended"] == 0
+
+
+def test_backfill_selected_appends_only_selected_pending_job(
+    dashboard_api: tuple[TestClient, AsyncMock],
+) -> None:
+    client, _runner = dashboard_api
+    client.put("/api/selections/quick-1")
+
+    response = client.post(
+        "/api/evaluation-backfill",
+        params={"scope": "selected"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["appended"] == 1
+    assert response.json()["progress"]["total"] == 1
+
+
+def test_backfill_rejects_unknown_scope(
+    dashboard_api: tuple[TestClient, AsyncMock],
+) -> None:
+    client, _runner = dashboard_api
+
+    response = client.post(
+        "/api/evaluation-backfill",
+        params={"scope": "visible"},
+    )
+
+    assert response.status_code == 422
+
+
 def test_selection_lifecycle(
     dashboard_api: tuple[TestClient, AsyncMock],
 ) -> None:
