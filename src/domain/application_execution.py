@@ -26,7 +26,6 @@ class ApplicationExecutionStatus(str, Enum):
 
 _TERMINAL = {
     ApplicationExecutionStatus.SUBMITTED,
-    ApplicationExecutionStatus.FAILED,
     ApplicationExecutionStatus.MANUAL_HANDOFF,
 }
 
@@ -60,6 +59,9 @@ _TRANSITIONS = {
     ApplicationExecutionStatus.SUBMISSION_UNCERTAIN: {
         ApplicationExecutionStatus.SUBMITTED,
         ApplicationExecutionStatus.FAILED,
+    },
+    ApplicationExecutionStatus.FAILED: {
+        ApplicationExecutionStatus.QUEUED,
     },
 }
 

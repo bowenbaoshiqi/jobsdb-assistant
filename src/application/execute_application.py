@@ -91,9 +91,16 @@ class ApplicationExecutionService:
         if self.executions.has_submitted_job(job_id, account_alias):
             raise ValueError("job was already submitted")
         package = self._approved_package(job_id)
-        return self.executions.create(
+        execution = self.executions.create(
             self._execution(snapshot, package, account_alias)
         )
+        if execution.status is ApplicationExecutionStatus.FAILED:
+            return self.executions.transition(
+                execution.id,
+                ApplicationExecutionStatus.QUEUED,
+                at=self.now(),
+            )
+        return execution
 
     def confirm_submission(
         self,
