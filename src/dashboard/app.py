@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from src.application.execute_application import ApplicationExecutionService
 from src.dashboard.application_service import DashboardApplicationService
 from src.dashboard.evaluation_progress import EvaluationProgressStore
 from src.dashboard.material_routes import material_router
@@ -24,6 +25,8 @@ class DashboardDependencies:
     application_service: DashboardApplicationService
     evaluation_progress: EvaluationProgressStore | None = None
     material_service: DashboardMaterialService | None = None
+    approved_application_service: ApplicationExecutionService | None = None
+    account_alias: str = "default"
 
 
 def create_dashboard_app(

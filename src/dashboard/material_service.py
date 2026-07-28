@@ -94,6 +94,15 @@ class DashboardMaterialService:
             expected_hash=package.resume.sha256,
         )
 
+    def approved_pdf_for_job(self, job_id: str) -> Path:
+        package = self.repository.current_approved_for_job(job_id)
+        if package is None:
+            raise ValueError("current approved package is required")
+        return self._private_file(
+            Path(package.resume.path),
+            expected_hash=package.resume.sha256,
+        )
+
     def approve(
         self,
         package_id: str,
@@ -136,4 +145,3 @@ class DashboardMaterialService:
         if actual != expected_hash:
             raise ValueError("material file hash mismatch")
         return resolved
-

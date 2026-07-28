@@ -174,12 +174,104 @@ function renderActions(job, checkbox) {
     const preview = text("a", `预览定制材料 v${job.material.version}`, "button-link primary");
     preview.href = `/materials/${encodeURIComponent(job.material.package_id)}`;
     actions.append(preview);
+    const approved = ["approved", "approved_with_fact_override"].includes(
+      job.material.review_status,
+    );
+    const execution = job.approved_application;
+    if (approved && job.apply_type === "quick_apply") {
+      if (execution?.status === "waiting_for_confirmation") {
+        const confirm = text("button", "确认并提交申请", "primary");
+        confirm.type = "button";
+        confirm.addEventListener("click", () => confirmApproved(execution, confirm));
+        actions.append(confirm);
+      } else if (execution?.status === "submitted") {
+        actions.append(text("span", "已使用批准材料投递", "material-state"));
+      } else if (execution?.status === "waiting_for_human") {
+        actions.append(text("span", "等待人工处理后继续", "material-state"));
+      } else if (!["queued", "preparing_resume", "submitting"].includes(execution?.status)) {
+        const prepare = text("button", "使用已批准材料准备申请", "primary");
+        prepare.type = "button";
+        prepare.addEventListener("click", () => prepareApproved(job, prepare));
+        actions.append(prepare);
+      } else {
+        actions.append(text("span", "申请任务处理中，请手动刷新查看状态", "material-state"));
+      }
+    }
+    if (approved && job.apply_type === "apply") {
+      const handoff = text("button", "下载定制简历并人工投递", "primary");
+      handoff.type = "button";
+      handoff.addEventListener("click", () => manualHandoff(job, handoff));
+      actions.append(handoff);
+    }
   } else if (job.selected) {
     actions.append(text("span", "等待生成定制材料", "material-state"));
   }
 
   checkbox.disabled = job.application_task?.status === "applying";
   return actions;
+}
+
+async function prepareApproved(job, button) {
+  button.disabled = true;
+  setError();
+  try {
+    const response = await fetch(
+      `/api/jobs/${encodeURIComponent(job.job_id)}/applications/prepare`,
+      { method: "POST" },
+    );
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "无法准备申请。");
+    job.approved_application = payload;
+    button.replaceWith(text("span", "申请任务已排队，请稍后手动刷新", "material-state"));
+    setStatus(`${job.title} 的定制材料申请任务已排队。`);
+  } catch (error) {
+    button.disabled = false;
+    setError(error.message);
+  }
+}
+
+async function confirmApproved(execution, button) {
+  button.disabled = true;
+  setError();
+  try {
+    const response = await fetch(
+      `/api/approved-applications/${encodeURIComponent(execution.id)}/confirm`,
+      { method: "POST" },
+    );
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "无法确认提交。");
+    button.replaceWith(text("span", "正在提交，请稍后手动刷新", "material-state"));
+    setStatus("已确认提交，Worker 正在执行最终投递。");
+  } catch (error) {
+    button.disabled = false;
+    setError(error.message);
+  }
+}
+
+async function manualHandoff(job, button) {
+  button.disabled = true;
+  const jobWindow = window.open("about:blank", "_blank", "noopener");
+  setError();
+  try {
+    const response = await fetch(
+      `/api/jobs/${encodeURIComponent(job.job_id)}/applications/manual-handoff`,
+      { method: "POST" },
+    );
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "无法准备人工投递材料。");
+    const download = document.createElement("a");
+    download.href = payload.resume_url;
+    download.download = "";
+    download.click();
+    await navigator.clipboard.writeText(payload.cover_letter_text);
+    if (jobWindow) jobWindow.location = payload.job_url;
+    setStatus("定制简历已下载，求职信已复制，并已打开 JobsDB 职位页。");
+  } catch (error) {
+    if (jobWindow) jobWindow.close();
+    setError(error.message);
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function renderJob(job) {

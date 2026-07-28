@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from src.dashboard.application_service import (
@@ -153,3 +153,126 @@ def register_routes(app: FastAPI, dependencies) -> None:
                 detail="application task not found",
             )
         return task
+
+    @app.post(
+        "/api/jobs/{job_id}/applications/prepare",
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    async def prepare_approved_application(job_id: str):
+        service = dependencies.approved_application_service
+        if service is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="approved application worker is unavailable",
+            )
+        try:
+            return service.queue(
+                job_id,
+                account_alias=dependencies.account_alias,
+            )
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="job not found",
+            ) from exc
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
+
+    @app.post(
+        "/api/approved-applications/{execution_id}/confirm",
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    async def confirm_approved_application(execution_id: str):
+        service = dependencies.approved_application_service
+        if service is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="approved application worker is unavailable",
+            )
+        try:
+            return service.confirm_submission(execution_id)
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="application execution not found",
+            ) from exc
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
+
+    @app.get("/api/approved-applications/{execution_id}")
+    async def approved_application_status(execution_id: str):
+        service = dependencies.approved_application_service
+        if service is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="approved application worker is unavailable",
+            )
+        execution = service.get(execution_id)
+        if execution is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="application execution not found",
+            )
+        return execution
+
+    @app.post("/api/jobs/{job_id}/applications/manual-handoff")
+    async def manual_application_handoff(job_id: str):
+        service = dependencies.approved_application_service
+        if service is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="approved application worker is unavailable",
+            )
+        try:
+            handoff = service.manual_handoff(
+                job_id,
+                account_alias=dependencies.account_alias,
+            )
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="job not found",
+            ) from exc
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
+        return {
+            "execution_id": handoff.execution_id,
+            "job_url": handoff.job_url,
+            "resume_url": f"/api/jobs/{job_id}/approved-resume",
+            "cover_letter_text": handoff.cover_letter_text,
+        }
+
+    @app.get("/api/jobs/{job_id}/approved-resume")
+    async def approved_resume(job_id: str):
+        service = dependencies.material_service
+        if service is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="material service is unavailable",
+            )
+        try:
+            path = service.approved_pdf_for_job(job_id)
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="job not found",
+            ) from exc
+        except (ValueError, FileNotFoundError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
+        return FileResponse(
+            path,
+            media_type="application/pdf",
+            filename=f"tailored-resume-{job_id}.pdf",
+        )

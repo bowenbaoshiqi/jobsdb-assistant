@@ -173,6 +173,36 @@ class ApplicationExecutionRepository:
             ).fetchone()
         return row is not None
 
+    def latest_for_jobs(
+        self,
+        job_ids: list[str],
+    ) -> dict[str, ApplicationExecution]:
+        if not job_ids:
+            return {}
+        placeholders = ", ".join("?" for _ in job_ids)
+        with self.database._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT execution.*
+                FROM application_executions AS execution
+                JOIN (
+                    SELECT job_id, MAX(created_at) AS latest_created
+                    FROM application_executions
+                    WHERE job_id IN ({placeholders})
+                    GROUP BY job_id
+                ) AS latest
+                ON latest.job_id = execution.job_id
+                AND latest.latest_created = execution.created_at
+                ORDER BY execution.job_id, execution.id DESC
+                """,
+                tuple(job_ids),
+            ).fetchall()
+        result: dict[str, ApplicationExecution] = {}
+        for row in rows:
+            execution = self._from_row(row)
+            result.setdefault(execution.identity.job_id, execution)
+        return result
+
     def list_events(
         self,
         execution_id: str,

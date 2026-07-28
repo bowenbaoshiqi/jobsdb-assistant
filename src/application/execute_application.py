@@ -114,6 +114,9 @@ class ApplicationExecutionService:
             at=self.now(),
         )
 
+    def get(self, execution_id: str) -> ApplicationExecution | None:
+        return self.executions.get(execution_id)
+
     async def run_next(self) -> bool:
         execution = self.executions.next_runnable()
         if execution is None:
