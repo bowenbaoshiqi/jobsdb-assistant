@@ -12,6 +12,7 @@ from pathlib import Path
 from src.browser.ports.page_controller import PageController
 from src.jobsdb.selectors import (
     PROFILE_ADD_RESUME,
+    PROFILE_RESUME_DELETE,
     PROFILE_RESUME_DELETE_CONFIRM,
     PROFILE_RESUME_DONE,
     PROFILE_RESUME_FILE_INPUT,
@@ -26,28 +27,16 @@ _REMOTE_NAME = re.compile(
 
 _LIST_RESUMES_JS = r"""() => {
   /* JBA_LIST_RESUMES */
-  const items = Array.from(document.querySelectorAll(
-    '[data-automation="resume-item"], [data-automation="uploaded-resume"]'
-  ));
-  return items.map(item => {
-    const named = item.querySelector(
-      '[data-automation="resume-name"], a[href*="resume"], [title]'
-    );
-    return (named?.textContent || named?.getAttribute('title')
-      || item.textContent || '').trim();
-  }).filter(Boolean);
+  return Array.from(document.querySelectorAll(
+    'button[aria-label^="Options for "]'
+  )).map(button => button.getAttribute('aria-label')
+    .replace(/^Options for /, '').trim()).filter(Boolean);
 }"""
 
-_DELETE_FIRST_RESUME_JS = r"""() => {
-  /* JBA_DELETE_FIRST_RESUME */
-  const item = document.querySelector(
-    '[data-automation="resume-item"], [data-automation="uploaded-resume"]'
-  );
-  if (!item) return false;
-  const button = item.querySelector(
-    'button[data-automation="delete-resume"], '
-    + 'button[data-automation="remove-resume"], '
-    + 'button[aria-label*="Delete"], button[aria-label*="Remove"]'
+_OPEN_FIRST_RESUME_OPTIONS_JS = r"""() => {
+  /* JBA_OPEN_FIRST_RESUME_OPTIONS */
+  const button = document.querySelector(
+    'button[aria-label^="Options for "]'
   );
   if (!button) return false;
   button.click();
@@ -95,15 +84,15 @@ class RemoteResumeManager:
                 "JobsDB resume section is unavailable"
             ) from exc
 
-        await self._delete_all()
-        if await self._list_names():
-            raise ResumeListNotEmptyError("remote resume list is not empty")
-
         await self.page.click(PROFILE_ADD_RESUME)
         await self.page.wait_for_selector(
             PROFILE_RESUME_FILE_INPUT,
             timeout=10.0,
         )
+        await self._delete_all()
+        if await self._list_names():
+            raise ResumeListNotEmptyError("remote resume list is not empty")
+
         with tempfile.TemporaryDirectory(prefix="jobsdb-resume-") as directory:
             upload = Path(directory) / remote_name
             shutil.copyfile(pdf, upload)
@@ -130,11 +119,15 @@ class RemoteResumeManager:
             names = await self._list_names()
             if not names:
                 return
-            clicked = await self.page.evaluate(_DELETE_FIRST_RESUME_JS)
+            clicked = await self.page.evaluate(
+                _OPEN_FIRST_RESUME_OPTIONS_JS
+            )
             if not clicked:
                 raise ResumeListNotEmptyError(
                     f"could not delete remote resume {names[0]!r}"
                 )
+            await self.page.wait_for_timeout(100)
+            await self.page.click(PROFILE_RESUME_DELETE)
             await self.page.wait_for_timeout(200)
             if await self.page.is_visible(PROFILE_RESUME_DELETE_CONFIRM):
                 await self.page.click(PROFILE_RESUME_DELETE_CONFIRM)

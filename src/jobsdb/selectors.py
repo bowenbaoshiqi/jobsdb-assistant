@@ -40,16 +40,16 @@ LOGOUT_BUTTON = 'a[href*="logout"], button:has-text("Log out")'
 
 # Profile resume management
 PROFILE_RESUME_SECTION = (
-    '[data-automation="resume-section"], '
-    '[data-automation="resumes-section"], '
-    'section:has-text("Resume")'
+    '[data-automation="resume-edit-link"]'
 )
 PROFILE_ADD_RESUME = (
-    'button:has-text("Add resume"), '
-    'button:has-text("Add or manage resumes")'
+    'button[data-automation="resume-edit-link"]'
 )
-PROFILE_RESUME_FILE_INPUT = 'input[type="file"]'
-PROFILE_RESUME_DONE = 'button:has-text("Done")'
+PROFILE_RESUME_FILE_INPUT = 'input[data-automation="resume-upload"]'
+PROFILE_RESUME_DONE = 'button[data-automation="manage-resume-done"]'
+PROFILE_RESUME_DELETE = (
+    'button[data-automation^="delete-resume-button-"]'
+)
 PROFILE_RESUME_DELETE_CONFIRM = (
     '[role="dialog"] button:has-text("Delete"), '
     '[role="dialog"] button:has-text("Remove")'

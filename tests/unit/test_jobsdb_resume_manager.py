@@ -7,7 +7,10 @@ from src.jobsdb.resumes import (
     ResumeListNotEmptyError,
     ResumeUploadMismatchError,
 )
-from src.jobsdb.selectors import PROFILE_ADD_RESUME
+from src.jobsdb.selectors import (
+    PROFILE_ADD_RESUME,
+    PROFILE_RESUME_DELETE,
+)
 
 
 class ResumePage:
@@ -33,11 +36,8 @@ class ResumePage:
             raise AssertionError("resume management must be opened first")
         if "JBA_LIST_RESUMES" in expression:
             return list(self.names)
-        if "JBA_DELETE_FIRST_RESUME" in expression:
-            if self.names and not self.refuse_delete:
-                self.names.pop(0)
-                return True
-            return False
+        if "JBA_OPEN_FIRST_RESUME_OPTIONS" in expression:
+            return bool(self.names) and not self.refuse_delete
         raise AssertionError(expression)
 
     async def is_visible(self, selector: str) -> bool:
@@ -46,6 +46,8 @@ class ResumePage:
     async def click(self, selector: str, timeout: float = 30.0) -> None:
         if selector == PROFILE_ADD_RESUME:
             self.management_open = True
+        elif selector == PROFILE_RESUME_DELETE and self.names:
+            self.names.pop(0)
 
     async def set_input_files(self, selector: str, path: str) -> None:
         self.uploaded_path = Path(path)
