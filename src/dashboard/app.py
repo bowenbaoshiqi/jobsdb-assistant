@@ -16,6 +16,7 @@ from src.dashboard.material_service import DashboardMaterialService
 from src.dashboard.query_service import DashboardQueryService
 from src.dashboard.routes import register_routes
 from src.storage.database import Database
+from src.storage.job_batch_repository import JobBatchRepository
 from src.storage.selection_repository import SelectionRepository
 
 
@@ -35,6 +36,8 @@ class DashboardDependencies:
     material_service: DashboardMaterialService | None = None
     approved_application_service: ApplicationExecutionService | None = None
     approved_application_worker: DashboardWorker | None = None
+    job_batch_repository: JobBatchRepository | None = None
+    job_batch_worker: DashboardWorker | None = None
     account_alias: str = "default"
 
 
@@ -45,9 +48,13 @@ def create_dashboard_app(
     async def lifespan(_app: FastAPI):
         if dependencies.approved_application_worker is not None:
             await dependencies.approved_application_worker.start()
+        if dependencies.job_batch_worker is not None:
+            await dependencies.job_batch_worker.start()
         try:
             yield
         finally:
+            if dependencies.job_batch_worker is not None:
+                await dependencies.job_batch_worker.close()
             if dependencies.approved_application_worker is not None:
                 await dependencies.approved_application_worker.close()
 

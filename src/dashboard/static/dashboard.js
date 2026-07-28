@@ -25,6 +25,10 @@ const elements = {
   generateMaterials: document.querySelector("#generate-materials"),
   materialBatchStatus: document.querySelector("#material-batch-status"),
   materialBatchNote: document.querySelector("#material-batch-note"),
+  nextBatchKeyword: document.querySelector("#next-batch-keyword"),
+  archiveAndDiscover: document.querySelector("#archive-and-discover"),
+  refreshBatchStatus: document.querySelector("#refresh-batch-status"),
+  batchStatus: document.querySelector("#batch-status"),
 };
 
 let currentPage = null;
@@ -468,6 +472,60 @@ async function loadEvaluationProgress() {
   }
 }
 
+const batchStatusLabels = {
+  discovering: "正在后台抓取",
+  waiting_for_scoring: "抓取完成，等待评分",
+  ready: "本批已准备好",
+  failed: "抓取失败",
+};
+
+async function loadBatchStatus() {
+  elements.refreshBatchStatus.disabled = true;
+  try {
+    const response = await fetch("/api/job-batch");
+    if (!response.ok) throw new Error("无法读取批次状态");
+    const payload = await response.json();
+    if (!payload.batch) {
+      elements.batchStatus.textContent = "暂无当前批次";
+      return;
+    }
+    const label = batchStatusLabels[payload.batch.status] || payload.batch.status;
+    const error = payload.batch.error_message ? `：${payload.batch.error_message}` : "";
+    elements.batchStatus.textContent =
+      `${payload.batch.keyword} · ${label} · ${payload.job_count} 个职位${error}`;
+  } catch (error) {
+    elements.batchStatus.textContent = error.message;
+  } finally {
+    elements.refreshBatchStatus.disabled = false;
+  }
+}
+
+async function archiveAndDiscover() {
+  const keyword = elements.nextBatchKeyword.value.trim();
+  if (!keyword) {
+    setError("请输入下一批职位的搜索关键词。");
+    elements.nextBatchKeyword.focus();
+    return;
+  }
+  elements.archiveAndDiscover.disabled = true;
+  setError();
+  try {
+    const response = await fetch("/api/job-batches/next", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keyword }),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "无法启动下一批抓取");
+    await Promise.all([loadJobs(), loadBatchStatus()]);
+    setStatus("当前批次已归档，下一批正在后台抓取。");
+  } catch (error) {
+    setError(error.message);
+  } finally {
+    elements.archiveAndDiscover.disabled = false;
+  }
+}
+
 function filtersChanged() {
   updateUrlFromFilters();
   loadJobs();
@@ -500,8 +558,13 @@ elements.dialog.addEventListener("close", () => {
   else pendingApplyJob = null;
 });
 elements.refreshResults.addEventListener("click", refreshDashboard);
+elements.refreshBatchStatus.addEventListener("click", async () => {
+  await Promise.all([loadBatchStatus(), loadJobs({ preserveContentOnError: true })]);
+});
+elements.archiveAndDiscover.addEventListener("click", archiveAndDiscover);
 elements.generateMaterials.addEventListener("click", generateSelectedMaterials);
 
 filtersFromUrl();
 loadJobs();
 loadEvaluationProgress();
+loadBatchStatus();

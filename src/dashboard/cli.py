@@ -6,6 +6,7 @@ import time
 import urllib.request
 import webbrowser
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from pathlib import Path
 
@@ -20,6 +21,8 @@ from src.application.approved_runtime import (
 )
 from src.application.approved_worker import ApprovedApplicationWorker
 from src.application.execute_application import ApplicationExecutionService
+from src.application.job_batch_discovery import JobBatchDiscoveryService
+from src.application.job_batch_worker import JobBatchWorker
 from src.application.runtime import build_material_generation_service
 from src.dashboard.app import DashboardDependencies, create_dashboard_app
 from src.dashboard.application_service import DashboardApplicationService
@@ -31,6 +34,7 @@ from src.storage.application_execution_repository import (
     ApplicationExecutionRepository,
 )
 from src.storage.database import Database
+from src.storage.job_batch_repository import JobBatchRepository
 from src.storage.material_repository import MaterialRepository
 from src.storage.selection_repository import SelectionRepository
 
@@ -165,6 +169,33 @@ def build_production_app():
     if not account.email:
         config.login.mode = "manual"
     database.set_account(account.alias)
+    job_batches = JobBatchRepository(database)
+    job_batches.purge_expired(
+        cutoff=datetime.now(UTC) - timedelta(days=30)
+    )
+
+    async def discover_batch(
+        keyword: str,
+        limit: int,
+        excluded_job_ids: set[str],
+    ) -> dict:
+        database.set_account(account.alias)
+        return await Orchestrator(
+            config,
+            account=account,
+            max_jobs=limit,
+        ).discover(
+            keyword,
+            limit=limit,
+            excluded_job_ids=excluded_job_ids,
+        )
+
+    job_batch_worker = JobBatchWorker(
+        service=JobBatchDiscoveryService(
+            job_batches,
+            runner=discover_batch,
+        )
+    )
 
     async def run_one(job_id: str) -> dict:
         database.set_account(account.alias)
@@ -199,7 +230,10 @@ def build_production_app():
     return create_dashboard_app(
         DashboardDependencies(
             database=database,
-            query_service=DashboardQueryService(database),
+            query_service=DashboardQueryService(
+                database,
+                job_batch_repository=job_batches,
+            ),
             selection_repository=SelectionRepository(database),
             application_service=application_service,
             evaluation_progress=EvaluationProgressStore(
@@ -213,6 +247,8 @@ def build_production_app():
             ),
             approved_application_service=approved_service,
             approved_application_worker=approved_worker,
+            job_batch_repository=job_batches,
+            job_batch_worker=job_batch_worker,
             account_alias=account.alias,
         )
     )

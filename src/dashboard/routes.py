@@ -1,13 +1,14 @@
 """HTTP routes for the local review Dashboard."""
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, field_validator
 
 from src.dashboard.application_service import (
     DirectApplyRequest,
@@ -18,10 +19,23 @@ from src.domain.job import ApplyType
 from src.storage.dashboard_application_repository import (
     ApplicationBusyError,
 )
+from src.storage.job_batch_repository import ActiveDiscoveryError
 
 _TEMPLATES = Jinja2Templates(
     directory=Path(__file__).with_name("templates")
 )
+
+
+class NextBatchRequest(BaseModel):
+    keyword: str
+
+    @field_validator("keyword")
+    @classmethod
+    def validate_keyword(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("keyword must not be empty")
+        return normalized
 
 
 def register_routes(app: FastAPI, dependencies) -> None:
@@ -86,6 +100,46 @@ def register_routes(app: FastAPI, dependencies) -> None:
                 "failed": 0,
             }
         return dependencies.evaluation_progress.get()
+
+    @app.get("/api/job-batch")
+    async def current_job_batch():
+        repository = dependencies.job_batch_repository
+        if repository is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="job batch service is unavailable",
+            )
+        batch = repository.current()
+        if batch is None:
+            return {"batch": None, "job_count": 0}
+        return {
+            "batch": batch,
+            "job_count": len(repository.current_job_ids()),
+        }
+
+    @app.post(
+        "/api/job-batches/next",
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    async def archive_and_discover(payload: NextBatchRequest):
+        repository = dependencies.job_batch_repository
+        if repository is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="job batch service is unavailable",
+            )
+        now = datetime.now(UTC)
+        repository.purge_expired(cutoff=now - timedelta(days=30))
+        try:
+            return repository.archive_and_create(
+                payload.keyword,
+                now=now,
+            )
+        except ActiveDiscoveryError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
 
     @app.put("/api/selections/{job_id}")
     async def select(job_id: str):

@@ -90,7 +90,10 @@ def dashboard_api(tmp_path) -> tuple[TestClient, AsyncMock]:
     app = create_dashboard_app(
         DashboardDependencies(
             database=database,
-            query_service=DashboardQueryService(database),
+            query_service=DashboardQueryService(
+                database,
+                job_batch_repository=batches,
+            ),
             selection_repository=SelectionRepository(database),
             application_service=application_service,
             approved_application_service=approved,

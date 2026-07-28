@@ -23,6 +23,18 @@
         </div>
       </header>
 
+      <section class="batch-controls" aria-label="职位批次">
+        <label>
+          下一批搜索关键词
+          <input id="next-batch-keyword" type="search" autocomplete="off" placeholder="例如：AI Lead">
+        </label>
+        <button id="archive-and-discover" type="button" class="primary">
+          归档当前批次并抓取下一批
+        </button>
+        <button id="refresh-batch-status" type="button">刷新批次状态</button>
+        <span id="batch-status" class="muted">正在读取当前批次…</span>
+      </section>
+
       <section class="summary-grid" aria-label="职位汇总">
         <div><strong id="total-count">0</strong><span>职位总数</span></div>
         <div><strong id="evaluated-count">0</strong><span>已评分</span></div>
