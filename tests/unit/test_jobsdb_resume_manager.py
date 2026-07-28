@@ -9,6 +9,7 @@ from src.jobsdb.resumes import (
 )
 from src.jobsdb.selectors import (
     PROFILE_ADD_RESUME,
+    PROFILE_RESUME_DEFAULT_CHECKBOX_CHECKED,
 )
 
 
@@ -29,6 +30,7 @@ class ResumePage:
         self.management_open = False
         self.pending_delete: str | None = None
         self.clicked_selectors: list[str] = []
+        self.default_checkbox_checked = True
 
     async def goto(self, url: str, wait_until: str = "domcontentloaded") -> None:
         self.url = url
@@ -55,12 +57,17 @@ class ResumePage:
         raise AssertionError(expression)
 
     async def is_visible(self, selector: str) -> bool:
-        return False
+        return (
+            selector == PROFILE_RESUME_DEFAULT_CHECKBOX_CHECKED
+            and self.default_checkbox_checked
+        )
 
     async def click(self, selector: str, timeout: float = 30.0) -> None:
         self.clicked_selectors.append(selector)
         if selector == PROFILE_ADD_RESUME:
             self.management_open = True
+        elif selector == PROFILE_RESUME_DEFAULT_CHECKBOX_CHECKED:
+            self.default_checkbox_checked = False
         elif "resume-item-" in selector and "Options for" in selector:
             if self.refuse_delete or not self.names:
                 raise RuntimeError("no resume options")
@@ -101,6 +108,40 @@ async def test_replace_deletes_every_resume_then_uploads_exact_file(
     assert page.management_open is True
     assert page.uploaded_path is not None
     assert not page.uploaded_path.exists()
+    assert page.default_checkbox_checked is False
+
+
+async def test_replace_waits_until_async_upload_appears(
+    tmp_path: Path,
+) -> None:
+    class AsyncUploadPage(ResumePage):
+        def __init__(self) -> None:
+            super().__init__(["default.pdf"])
+            self.pending_upload_name: str | None = None
+            self.upload_polls = 0
+
+        async def set_input_files(self, selector: str, path: str) -> None:
+            self.uploaded_path = Path(path)
+            self.pending_upload_name = self.uploaded_path.name
+
+        async def evaluate(self, expression: str):
+            if self.pending_upload_name is not None:
+                self.upload_polls += 1
+                if self.upload_polls >= 3:
+                    self.names.append(self.pending_upload_name)
+                    self.pending_upload_name = None
+            return await super().evaluate(expression)
+
+    page = AsyncUploadPage()
+
+    receipt = await RemoteResumeManager(page).replace_all_with(
+        _pdf(tmp_path),
+        "JBA_42_v1_abcd1234.pdf",
+    )
+
+    assert receipt.filename == "JBA_42_v1_abcd1234.pdf"
+    assert page.upload_polls >= 3
+    assert page.names == ["default.pdf", "JBA_42_v1_abcd1234.pdf"]
 
 
 async def test_replace_stops_when_delete_cannot_be_confirmed(
