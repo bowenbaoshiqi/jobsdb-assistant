@@ -10,12 +10,12 @@ from src.dashboard.app import DashboardDependencies, create_dashboard_app
 from src.dashboard.application_service import DashboardApplicationService
 from src.dashboard.evaluation_progress import EvaluationProgressStore
 from src.dashboard.query_service import DashboardQueryService
-from src.domain.job import ApplyType, JobDetailCapture
 from src.domain.application_execution import (
     ApplicationExecution,
     ApplicationExecutionStatus,
     ApplicationIdentity,
 )
+from src.domain.job import ApplyType, JobDetailCapture
 from src.storage.database import Database
 from src.storage.selection_repository import SelectionRepository
 
