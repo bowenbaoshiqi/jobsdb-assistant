@@ -22,8 +22,8 @@ uv run ruff check src tests
 All checks passed!
 
 uv run pytest -m 'not e2e' --cov=src --cov-branch --cov-report=term-missing
-804 passed, 1 skipped, 25 deselected
-Total coverage: 85.13%
+806 passed, 1 skipped, 25 deselected
+Total coverage: 85.16%
 ```
 
 ## Deliberate manual handoff
