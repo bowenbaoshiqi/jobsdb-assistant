@@ -1,9 +1,14 @@
 # JobsDB Assistant
 
-当前开发版本：`v0.6.0`。新产品基于上游 JobsDB 自动投递引擎 v2.0
+当前开发版本：`v0.8.0`。新产品基于上游 JobsDB 自动投递引擎 v2.0
 构建；历史 `v2.0-phase*` 标签仅代表上游引擎的重构阶段。
 
-`v0.6.0` 完成从职位选择、定制材料审核到申请执行的本地闭环。用户可以为每个
+`v0.8.0` 在职位选择、定制材料审核和申请执行闭环之上增加统一 Agent 工作
+协议。用户启动一次 CC/Codex Skill 后，可以主要留在 Dashboard 完成搜索、
+归档、选择和审核；画像、评分、完整简体中文 JD 翻译及材料生成会由同一 Agent
+会话持续处理。
+
+用户可以为每个
 职位只生成英文求职信并保留 JobsDB 默认简历，也可以生成独立英文简历和求职信。
 定制简历只替换固定 v5 模板的 `Professional Summary`、四条
 `Career Highlights` 和三项 `Core Competencies`，工作经历及后续内容保持
@@ -44,34 +49,44 @@ uv run jobsdb-assistant discover \
 页面抓取并保存职位，不读取账户、不登录、不要求邮箱或密码，也不会进入申请
 状态机或提交申请。
 
-### 3. 在 Claude Code 或 Codex 中生成画像并评分
+### 3. 在 Claude Code 或 Codex 中启动完整工作流
 
 仓库内置同一套 `jobsdb-assistant` Skill：
 
 - Codex/open-agent：`.agents/skills/jobsdb-assistant/SKILL.md`
 - Claude Code：`.claude/skills/jobsdb-assistant/SKILL.md`
 
-在 CC/Codex 中说“用 jobsdb-assistant 搜索并评分 AI Architect 职位”。保持
-当前 Agent 会话直到任务完成。首次运行会：
+在 CC/Codex 中只需说一次：
+
+> 使用 jobsdb-assistant 启动求职助手
+
+如果是首次使用，可在同一句话中提供简历绝对路径。Skill 会运行
+`agent doctor → agent start → agent next` 统一协议，并保持当前 Agent 会话。
+之后可以在 Dashboard 归档并搜索下一批职位或创建材料任务，无需再次返回 Agent
+说“继续”。
+
+首次运行会：
 
 1. 按 manifest 安装两个固定 SHA 的 public fork；
 2. 使用 ai-job-search onboarding 能力提取资料，并完成 Python 强制校验的
    画像访谈；薪资和推荐人等敏感项可以明确选择不提供；
 3. 展示候选人画像，等待你明确确认后保存 `CandidateProfile v1`；
-4. 抓取 JobsDB 当前职位；
+4. 等待用户在 Dashboard 输入关键词，或处理当前已有批次；
 5. 使用 career-ops 原生 A–F 规则评分；
 6. 输出完整本地报告。
 
-后续运行默认复用已安装的 fork、已确认画像和未变化 JD 的评分缓存。只有明确要求
-更新画像时才创建 `v2`；不会自动覆盖旧版本或自动更新 fork。
+后续运行默认复用同一个未停止 Agent 会话、已安装的 fork、已确认画像和未变化
+JD 的评分缓存。只有明确要求更新画像时才创建新版本；不会自动覆盖旧版本或自动
+更新 fork。CC/Codex 关闭后 AI 推理会暂停，再次启动 Skill 会从 SQLite 中恢复
+未完成任务，不会重复生成评分或材料。
 
-Python CLI 是 Skill 使用的稳定协议：
+Python CLI 是 Skill 使用的稳定协议，所有内部 ID 都由 Python 保存，Skill 只
+复制不透明的 `session` 和 `work_id`：
 
 ```bash
-uv run python -m src.main workflow profile-prepare --run-id RUN_ID --source PATH
-uv run python -m src.main discover --keyword "AI Architect"
-uv run python -m src.main workflow evaluation-prepare --run-id RUN_ID
-uv run python -m src.main workflow report
+uv run jobsdb-assistant agent doctor
+uv run jobsdb-assistant agent start --source /absolute/path/resume.pdf
+uv run jobsdb-assistant agent next --session SESSION --wait 30
 ```
 
 包含简历、画像、JD 和 AI 结果的检查点保存在忽略的
@@ -80,7 +95,10 @@ uv run python -m src.main workflow report
 单份简历首次导入不能直接生成画像提案：必须先回答或明确跳过全部必问维度，
 Python 才允许 Agent 提交画像。
 
-### 4. 启动本地审核 Dashboard
+### 4. 单独启动本地审核 Dashboard（诊断用途）
+
+正常使用无需执行本节命令，`agent start` 会启动或复用 Dashboard。以下入口保留
+给开发者诊断服务。
 
 先检查依赖、SQLite schema、数据数量和默认端口：
 

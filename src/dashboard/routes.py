@@ -20,6 +20,7 @@ from src.storage.dashboard_application_repository import (
     ApplicationBusyError,
 )
 from src.storage.job_batch_repository import ActiveDiscoveryError
+from src.version import __version__
 
 _TEMPLATES = Jinja2Templates(
     directory=Path(__file__).with_name("templates")
@@ -68,7 +69,7 @@ def register_routes(app: FastAPI, dependencies) -> None:
         return {
             "status": "ok",
             "database": "ready",
-            "dashboard_version": "0.6.0",
+            "dashboard_version": __version__,
         }
 
     @app.get("/api/jobs")

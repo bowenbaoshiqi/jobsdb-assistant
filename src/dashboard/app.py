@@ -18,6 +18,7 @@ from src.dashboard.routes import register_routes
 from src.storage.database import Database
 from src.storage.job_batch_repository import JobBatchRepository
 from src.storage.selection_repository import SelectionRepository
+from src.version import __version__
 
 
 class DashboardWorker(Protocol):
@@ -60,7 +61,7 @@ def create_dashboard_app(
 
     app = FastAPI(
         title="JobsDB Assistant",
-        version="0.6.0",
+        version=__version__,
         docs_url=None,
         redoc_url=None,
         lifespan=lifespan,
