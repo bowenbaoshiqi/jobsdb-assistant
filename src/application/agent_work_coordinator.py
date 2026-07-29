@@ -32,6 +32,23 @@ class AgentWorkSources(Protocol):
 
 
 class AgentWorkDispatcher(Protocol):
+    def mark_claimed(
+        self,
+        kind: AgentWorkKind,
+        task_id: str,
+        *,
+        now: datetime,
+    ) -> None: ...
+
+    def mark_failed(
+        self,
+        kind: AgentWorkKind,
+        task_id: str,
+        *,
+        error_message: str,
+        now: datetime,
+    ) -> None: ...
+
     def prepare_profile(
         self,
         run_id: str,
@@ -153,6 +170,12 @@ class AgentWorkCoordinator:
                 lease_duration=timedelta(minutes=5),
             )
             if claimed is not None:
+                if claimed.kind is not AgentWorkKind.HUMAN_RESPONSE:
+                    self.dispatcher.mark_claimed(
+                        claimed.kind,
+                        claimed.internal_key.split(":", 1)[1],
+                        now=current,
+                    )
                 if claimed.kind is AgentWorkKind.HUMAN_RESPONSE:
                     return AgentNextResult(
                         state=AgentWorkStatus.HUMAN_REQUIRED,
@@ -253,6 +276,19 @@ class AgentWorkCoordinator:
         error_message: str,
         now: datetime,
     ) -> AgentWorkRecord:
+        record = self.work.get(work_id)
+        if (
+            record.status is not AgentWorkStatus.CLAIMED
+            or record.session_id != session_id
+        ):
+            raise ValueError("agent session is not the active lease owner")
+        task_id = record.internal_key.split(":", 1)[1]
+        self.dispatcher.mark_failed(
+            record.kind,
+            task_id,
+            error_message=error_message,
+            now=now,
+        )
         return self.work.fail(
             session_id,
             work_id,

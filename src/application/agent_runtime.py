@@ -16,6 +16,7 @@ from src.dashboard.evaluation_progress import (
     EvaluationProgressStore,
     EvaluationTaskStatus,
 )
+from src.domain.agent_work import AgentWorkKind
 from src.storage.agent_work_repository import AgentWorkRepository
 from src.storage.database import Database
 from src.storage.job_batch_repository import JobBatchRepository
@@ -52,6 +53,42 @@ class RuntimeAgentWorkDispatcher:
         self.progress = progress
         self.workflow = workflow
         self.materials = materials
+
+    def mark_claimed(
+        self,
+        kind: AgentWorkKind,
+        task_id: str,
+        *,
+        now: datetime,
+    ) -> None:
+        if kind is AgentWorkKind.JOB_EVALUATION:
+            self.progress.mark(task_id, EvaluationTaskStatus.RUNNING)
+        elif kind is AgentWorkKind.APPLICATION_MATERIAL:
+            self.materials.repository.start_task(
+                task_id,
+                started_at=now,
+            )
+
+    def mark_failed(
+        self,
+        kind: AgentWorkKind,
+        task_id: str,
+        *,
+        error_message: str,
+        now: datetime,
+    ) -> None:
+        if kind is AgentWorkKind.JOB_EVALUATION:
+            self.progress.mark(task_id, EvaluationTaskStatus.FAILED)
+            if self.progress.get().status == "completed":
+                current = JobBatchRepository(self.database).current()
+                if current is not None:
+                    JobBatchRepository(self.database).mark_scored(current.id)
+        elif kind is AgentWorkKind.APPLICATION_MATERIAL:
+            self.materials.repository.fail_task(
+                task_id,
+                error_message=error_message,
+                completed_at=now,
+            )
 
     def prepare_profile(
         self,
