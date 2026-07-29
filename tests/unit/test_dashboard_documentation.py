@@ -15,6 +15,7 @@ def test_readme_documents_reproducible_local_dashboard() -> None:
     assert "v0.8.0" in readme
     assert "使用 jobsdb-assistant 启动求职助手" in readme
     assert "无需再次返回 Agent" in readme
+    assert "agent listen" in readme
     assert "agent next" in readme
     assert "仅定制求职信" in readme
     assert "定制简历 + 求职信" in readme
