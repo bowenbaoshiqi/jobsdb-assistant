@@ -111,7 +111,7 @@ def test_dashboard_reports_early_child_exit(monkeypatch, tmp_path) -> None:
 
 class _Connection:
     def execute(self, _query):
-        return SimpleNamespace(fetchone=lambda: (9,))
+        return SimpleNamespace(fetchone=lambda: (10,))
 
 
 class _ConnectionContext:

@@ -8,6 +8,9 @@ from contextlib import closing
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+# Bump alongside the newest migration registered by ``Database``.
+CURRENT_SCHEMA_VERSION = 10
+
 
 @dataclass(frozen=True)
 class Migration:

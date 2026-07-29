@@ -14,6 +14,7 @@ from src.integrations.manager import IntegrationManager
 from src.integrations.manifest import load_manifest
 from src.privacy import scan_tracked_files
 from src.storage.database import Database
+from src.storage.migrations import CURRENT_SCHEMA_VERSION
 
 
 @dataclass(frozen=True)
@@ -45,7 +46,7 @@ def run_agent_doctor(
         checks.append(
             AgentCheck(
                 "database",
-                "pass" if version == 9 else "fail",
+                "pass" if version == CURRENT_SCHEMA_VERSION else "fail",
                 f"schema {version} ready",
             )
         )

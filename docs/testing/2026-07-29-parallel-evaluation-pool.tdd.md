@@ -23,7 +23,7 @@ All checks passed!
 
 uv run pytest -m 'not e2e' --cov=src --cov-branch --cov-report=term-missing
 806 passed, 1 skipped, 25 deselected
-Total coverage: 85.16%
+Total coverage: 85.14%
 ```
 
 ## Deliberate manual handoff
