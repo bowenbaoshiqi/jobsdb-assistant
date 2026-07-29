@@ -74,6 +74,15 @@ class EvaluationProgressStore:
         self._write(updated)
         return updated
 
+    def requeue_if_running(self, task_id: str) -> EvaluationBatch | None:
+        """Project claim recovery without moving terminal work backwards."""
+        batch = self._read()
+        if batch is None or task_id not in batch.tasks:
+            raise KeyError(task_id)
+        if batch.tasks[task_id] is not EvaluationTaskStatus.RUNNING:
+            return batch
+        return self.mark(task_id, EvaluationTaskStatus.QUEUED)
+
     def claim_next(self) -> str | None:
         batch = self._read()
         if batch is None:

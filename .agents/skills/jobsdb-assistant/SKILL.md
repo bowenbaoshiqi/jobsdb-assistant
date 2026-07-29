@@ -76,6 +76,19 @@ says to stop, then run:
 uv run jobsdb-assistant agent stop --session SESSION
 ```
 
+Before reporting normal completion, run the read-only terminal guard:
+
+```bash
+uv run jobsdb-assistant agent status --session SESSION
+```
+
+`claimed > 0` or `queued > 0` means the workflow is not complete. A claimed
+envelope must end with `agent submit`, `agent fail`, or an explicit
+`agent stop`; never end the Agent turn while it is still claimed. Do not repair
+state by editing the Dashboard progress file or by reading SQLite. If the
+client turn disappears, the next `agent start`, `listen`, or `next` performs
+lease recovery.
+
 ## Claimed-work rules
 
 The task schema and declared pinned capabilities define the AI work. Do not

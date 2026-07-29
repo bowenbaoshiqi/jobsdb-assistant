@@ -123,6 +123,55 @@ def test_new_coordinator_resumes_claimed_work_exactly_once(tmp_path) -> None:
     assert resumed.work.attempt == 1
 
 
+def test_expired_evaluation_claim_is_requeued_in_dashboard_on_start(
+    tmp_path,
+) -> None:
+    now = datetime.now(UTC)
+    database = Database(str(tmp_path / "jobs.db"))
+    tasks_root = tmp_path / "workspace" / "ai-tasks"
+    _task(
+        tasks_root,
+        "evaluation-current",
+        capability="integrations/job-evaluation/capability.md",
+    )
+    progress = EvaluationProgressStore(tmp_path / "progress.json")
+    progress.start(["evaluation-current"], now=now)
+    dispatcher = RuntimeAgentWorkDispatcher(
+        database=database,
+        progress=progress,
+        workflow=Mock(),
+        materials=Mock(),
+    )
+    sources = RuntimeAgentWorkSources(
+        progress=progress,
+        materials=MaterialRepository(database),
+    )
+    first = AgentWorkCoordinator(
+        work=AgentWorkRepository(database),
+        sources=sources,
+        dispatcher=dispatcher,
+        tasks_root=tasks_root,
+        sleeper=lambda _seconds: None,
+    )
+    session = first.start(now=now)
+    claimed = first.next(session.id, wait_seconds=0, now=now)
+    assert claimed.work is not None
+    assert progress.get().running == 1
+
+    second = AgentWorkCoordinator(
+        work=AgentWorkRepository(database),
+        sources=sources,
+        dispatcher=dispatcher,
+        tasks_root=tasks_root,
+        sleeper=lambda _seconds: None,
+    )
+    second.start(now=now + timedelta(minutes=6))
+
+    state = progress.get()
+    assert state.running == 0
+    assert state.queued == 1
+
+
 def test_runtime_dispatch_marks_completed_batch_scored(tmp_path) -> None:
     now = datetime.now(UTC)
     database = Database(str(tmp_path / "jobs.db"))

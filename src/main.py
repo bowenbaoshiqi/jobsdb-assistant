@@ -208,6 +208,21 @@ def agent_stop(
     })
 
 
+@agent_app.command("status")
+def agent_status(
+    session: str = typer.Option(..., "--session"),
+) -> None:
+    """查看当前 Agent 工作计数，不暴露内部任务标识。"""
+    status = _build_agent_work_coordinator().status(
+        session,
+        now=datetime.now(UTC),
+    )
+    _print_json({
+        "protocol_version": 1,
+        **status,
+    })
+
+
 def _onboarding_payload(outcome) -> dict:
     return {
         "status": outcome.status.value,

@@ -7,6 +7,7 @@ import json
 import time
 import uuid
 from collections.abc import Callable
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Protocol
@@ -46,6 +47,14 @@ class AgentWorkDispatcher(Protocol):
         task_id: str,
         *,
         error_message: str,
+        now: datetime,
+    ) -> None: ...
+
+    def mark_requeued(
+        self,
+        kind: AgentWorkKind,
+        task_id: str,
+        *,
         now: datetime,
     ) -> None: ...
 
@@ -97,8 +106,39 @@ class AgentWorkCoordinator:
         self.now_factory = now_factory or (lambda: datetime.now(UTC))
 
     def start(self, *, now: datetime) -> AgentSessionRecord:
+        self.recover_stale_work(now=now)
         self.sync_pending(now=now)
         return self.work.start_or_resume_session(now=now)
+
+    def recover_stale_work(self, *, now: datetime):
+        """Recover expired claims and reconcile their external projections."""
+        recovered = self.work.recover_expired(now=now)
+        for item in recovered:
+            with suppress(KeyError):
+                self.dispatcher.mark_requeued(
+                    item.kind,
+                    item.internal_task_id,
+                    now=now,
+                )
+        return tuple(recovered)
+
+    def status(self, session_id: str, *, now: datetime) -> dict[str, object]:
+        self.recover_stale_work(now=now)
+        session = self.work.session(session_id)
+        counts = self.work.status_counts(session_id=session_id)
+        active = counts[AgentWorkStatus.QUEUED.value] + counts[
+            AgentWorkStatus.CLAIMED.value
+        ]
+        return {
+            "session_state": session.status.value,
+            "work": {
+                "queued": counts[AgentWorkStatus.QUEUED.value],
+                "claimed": counts[AgentWorkStatus.CLAIMED.value],
+                "completed": counts[AgentWorkStatus.COMPLETED.value],
+                "failed": counts[AgentWorkStatus.FAILED.value],
+            },
+            "terminal": active == 0,
+        }
 
     def prepare_profile(
         self,
@@ -163,6 +203,7 @@ class AgentWorkCoordinator:
         deadline = time.monotonic() + wait_seconds
         current = now or self.now_factory()
         while True:
+            self.recover_stale_work(now=current)
             self.sync_pending(now=current)
             claimed = self.work.claim_next(
                 session_id,
@@ -302,6 +343,14 @@ class AgentWorkCoordinator:
         *,
         now: datetime,
     ) -> AgentSessionRecord:
+        released = self.work.release_session(session_id, now=now)
+        for item in released:
+            with suppress(KeyError):
+                self.dispatcher.mark_requeued(
+                    item.kind,
+                    item.internal_task_id,
+                    now=now,
+                )
         return self.work.stop_session(session_id, now=now)
 
     def _enqueue_task(

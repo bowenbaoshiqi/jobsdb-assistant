@@ -88,6 +88,38 @@ def test_agent_next_prints_one_machine_readable_result(monkeypatch) -> None:
     coordinator.next.assert_called_once()
 
 
+def test_agent_status_prints_terminal_counts_without_private_ids(
+    monkeypatch,
+) -> None:
+    coordinator = Mock()
+    coordinator.status.return_value = {
+        "session_state": "active",
+        "work": {
+            "queued": 0,
+            "claimed": 0,
+            "completed": 1,
+            "failed": 0,
+        },
+        "terminal": True,
+    }
+    monkeypatch.setattr(
+        "src.main._build_agent_work_coordinator",
+        lambda: coordinator,
+    )
+
+    result = runner.invoke(
+        app,
+        ["agent", "status", "--session", "agent-session-token"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["terminal"] is True
+    assert payload["work"]["completed"] == 1
+    assert "work_id" not in payload
+    coordinator.status.assert_called_once()
+
+
 def test_agent_listen_does_not_return_when_queue_is_temporarily_idle(
     monkeypatch,
 ) -> None:

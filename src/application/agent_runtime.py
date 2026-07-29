@@ -90,6 +90,20 @@ class RuntimeAgentWorkDispatcher:
                 completed_at=now,
             )
 
+    def mark_requeued(
+        self,
+        kind: AgentWorkKind,
+        task_id: str,
+        *,
+        now: datetime,
+    ) -> None:
+        if kind is AgentWorkKind.JOB_EVALUATION:
+            self.progress.requeue_if_running(task_id)
+        elif kind is AgentWorkKind.APPLICATION_MATERIAL:
+            # Material tasks have no separate running projection; a released
+            # Agent claim remains pending in their repository.
+            return
+
     def prepare_profile(
         self,
         run_id: str,

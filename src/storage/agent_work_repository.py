@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -48,6 +49,17 @@ class AgentWorkRecord(BaseModel):
     created_at: datetime
     updated_at: datetime
     completed_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class RecoveredAgentWork:
+    """A claim transitioned back to the durable queue."""
+
+    work_id: str
+    kind: AgentWorkKind
+    internal_task_id: str
+    previous_session_id: str | None
+    recovery_reason: Literal["lease_expired", "session_stopped"]
 
 
 class AgentWorkRepository:
@@ -282,9 +294,40 @@ class AgentWorkRepository:
             ).fetchone()
         return self._work_from_row(row)
 
-    def recover_expired(self, *, now: datetime) -> int:
+    def recover_expired(self, *, now: datetime) -> list[RecoveredAgentWork]:
         with self.database._connect() as conn:
             return self._recover_expired_in_connection(conn, now=now)
+
+    def release_session(
+        self,
+        session_id: str,
+        *,
+        now: datetime,
+    ) -> list[RecoveredAgentWork]:
+        """Release this session's claims and return their identities."""
+        timestamp = now.isoformat()
+        with self.database._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM agent_work_items
+                WHERE session_id = ? AND status = 'claimed'
+                ORDER BY created_at, id
+                """,
+                (session_id,),
+            ).fetchall()
+            conn.execute(
+                """
+                UPDATE agent_work_items
+                SET status = 'queued', session_id = NULL,
+                    lease_expires_at = NULL, updated_at = ?
+                WHERE session_id = ? AND status = 'claimed'
+                """,
+                (timestamp, session_id),
+            )
+        return [
+            self._recovered_from_row(row, reason="session_stopped")
+            for row in rows
+        ]
 
     def complete(
         self,
@@ -411,6 +454,30 @@ class AgentWorkRepository:
             raise KeyError(work_id)
         return self._work_from_row(row)
 
+    def session(self, session_id: str) -> AgentSessionRecord:
+        with self.database._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM agent_sessions WHERE id = ?",
+                (session_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError(session_id)
+        return self._session_from_row(row)
+
+    def status_counts(self, *, session_id: str | None = None) -> dict[str, int]:
+        query = "SELECT status, COUNT(*) AS count FROM agent_work_items"
+        parameters: tuple[str, ...] = ()
+        if session_id is not None:
+            query += " WHERE session_id = ? OR status = 'queued'"
+            parameters = (session_id,)
+        query += " GROUP BY status"
+        with self.database._connect() as conn:
+            rows = conn.execute(query, parameters).fetchall()
+        counts = {status.value: 0 for status in AgentWorkStatus}
+        for row in rows:
+            counts[row["status"]] = row["count"]
+        return counts
+
     def first_open_by_kinds(
         self,
         kinds: tuple[AgentWorkKind, ...],
@@ -432,8 +499,20 @@ class AgentWorkRepository:
         return None if row is None else self._work_from_row(row)
 
     @staticmethod
-    def _recover_expired_in_connection(conn, *, now: datetime) -> int:
-        cursor = conn.execute(
+    def _recover_expired_in_connection(
+        conn,
+        *,
+        now: datetime,
+    ) -> list[RecoveredAgentWork]:
+        rows = conn.execute(
+            """
+            SELECT * FROM agent_work_items
+            WHERE status = 'claimed' AND lease_expires_at <= ?
+            ORDER BY created_at, id
+            """,
+            (now.isoformat(),),
+        ).fetchall()
+        conn.execute(
             """
             UPDATE agent_work_items
             SET status = 'queued', session_id = NULL,
@@ -442,7 +521,29 @@ class AgentWorkRepository:
             """,
             (now.isoformat(), now.isoformat()),
         )
-        return cursor.rowcount
+        return [
+            AgentWorkRepository._recovered_from_row(
+                row,
+                reason="lease_expired",
+            )
+            for row in rows
+        ]
+
+    @staticmethod
+    def _recovered_from_row(
+        row,
+        *,
+        reason: Literal["lease_expired", "session_stopped"],
+    ) -> RecoveredAgentWork:
+        record = AgentWorkRepository._work_from_row(row)
+        _, internal_task_id = record.internal_key.split(":", 1)
+        return RecoveredAgentWork(
+            work_id=record.id,
+            kind=record.kind,
+            internal_task_id=internal_task_id,
+            previous_session_id=record.session_id,
+            recovery_reason=reason,
+        )
 
     @staticmethod
     def _require_active_session(conn, session_id: str) -> None:
