@@ -64,6 +64,12 @@ def _build_agent_work_coordinator():
     return build_agent_work_coordinator()
 
 
+def _ensure_agent_dashboard(*, port: int) -> str:
+    from src.agent.dashboard import ensure_agent_dashboard
+
+    return ensure_agent_dashboard(port=port)
+
+
 def _print_json(payload: dict) -> None:
     typer.echo(json.dumps(payload, ensure_ascii=False, sort_keys=True))
 
@@ -83,6 +89,7 @@ def agent_start(
         update=update_profile,
         now=now,
     )
+    _ensure_agent_dashboard(port=port)
     _print_json({
         "protocol_version": 1,
         "state": "active",
