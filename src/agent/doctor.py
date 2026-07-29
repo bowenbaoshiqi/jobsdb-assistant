@@ -45,7 +45,7 @@ def run_agent_doctor(
         checks.append(
             AgentCheck(
                 "database",
-                "pass" if version == 8 else "fail",
+                "pass" if version == 9 else "fail",
                 f"schema {version} ready",
             )
         )
