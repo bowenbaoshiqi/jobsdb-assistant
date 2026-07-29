@@ -241,6 +241,69 @@ def test_dashboard_material_tasks_reach_the_same_agent_session(
     assert claimed.work.kind is AgentWorkKind.APPLICATION_MATERIAL
 
 
+def test_three_slot_pool_requires_ready_workers_before_claiming(
+    tmp_path,
+) -> None:
+    now = datetime.now(UTC)
+    database = Database(str(tmp_path / "jobs.db"))
+    tasks_root = tmp_path / "workspace" / "ai-tasks"
+    task_ids = [f"evaluation-{index}" for index in range(3)]
+    for task_id in task_ids:
+        _task(
+            tasks_root,
+            task_id,
+            capability="integrations/job-evaluation/capability.md",
+        )
+    progress = EvaluationProgressStore(tmp_path / "progress.json")
+    progress.start(task_ids, now=now)
+    coordinator = AgentWorkCoordinator(
+        work=AgentWorkRepository(database),
+        sources=RuntimeAgentWorkSources(
+            progress=progress,
+            materials=MaterialRepository(database),
+        ),
+        dispatcher=Mock(),
+        tasks_root=tasks_root,
+        sleeper=lambda _seconds: None,
+    )
+    session = coordinator.start(now=now)
+
+    pool = coordinator.pool_start(
+        session_id=session.id,
+        now=now,
+        capability_context_id="cap-v1",
+        profile_context_id="profile-v1",
+    )
+    assert coordinator.pool_claim(
+        session_id=session.id,
+        pool_id=pool.id,
+        slot_token=pool.slots[0].slot_token,
+        now=now,
+    ) is None
+
+    for slot in pool.slots:
+        coordinator.pool_ready(
+            pool_id=pool.id,
+            slot_token=slot.slot_token,
+            capability_context_id="cap-v1",
+            profile_context_id="profile-v1",
+            now=now,
+        )
+
+    claimed = [
+        coordinator.pool_claim(
+            session_id=session.id,
+            pool_id=pool.id,
+            slot_token=slot.slot_token,
+            now=now,
+        )
+        for slot in pool.slots
+    ]
+
+    assert all(item is not None for item in claimed)
+    assert len({item.id for item in claimed if item is not None}) == 3
+
+
 def test_failed_evaluation_does_not_leave_dashboard_progress_running(
     tmp_path,
 ) -> None:
