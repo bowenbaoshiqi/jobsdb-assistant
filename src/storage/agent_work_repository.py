@@ -72,6 +72,35 @@ class AgentWorkRepository:
             ).fetchone()
         return self._session_from_row(row)
 
+    def start_or_resume_session(
+        self,
+        *,
+        now: datetime,
+    ) -> AgentSessionRecord:
+        timestamp = now.isoformat()
+        with self.database._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM agent_sessions
+                WHERE status = 'active'
+                ORDER BY heartbeat_at DESC, started_at DESC
+                LIMIT 1
+                """
+            ).fetchone()
+            if row is None:
+                return self.start_session(now=now)
+            conn.execute(
+                """
+                UPDATE agent_sessions SET heartbeat_at = ? WHERE id = ?
+                """,
+                (timestamp, row["id"]),
+            )
+            row = conn.execute(
+                "SELECT * FROM agent_sessions WHERE id = ?",
+                (row["id"],),
+            ).fetchone()
+        return self._session_from_row(row)
+
     def enqueue(
         self,
         *,

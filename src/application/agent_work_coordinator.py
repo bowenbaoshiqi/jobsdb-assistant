@@ -81,7 +81,7 @@ class AgentWorkCoordinator:
 
     def start(self, *, now: datetime) -> AgentSessionRecord:
         self.sync_pending(now=now)
-        return self.work.start_session(now=now)
+        return self.work.start_or_resume_session(now=now)
 
     def prepare_profile(
         self,
