@@ -1,12 +1,12 @@
 from datetime import UTC, datetime
 from unittest.mock import Mock
 
-from src.application.agent_work_coordinator import AgentWorkCoordinator
 from src.application.agent_runtime import RuntimeAgentWorkSources
+from src.application.agent_work_coordinator import AgentWorkCoordinator
 from src.dashboard.evaluation_progress import EvaluationProgressStore
-from src.domain.agent_work import AgentWorkKind, AgentWorkStatus
-from src.storage.database import Database
+from src.domain.agent_work import AgentWorkStatus
 from src.storage.agent_work_repository import AgentWorkRepository
+from src.storage.database import Database
 from src.storage.material_repository import MaterialRepository
 
 

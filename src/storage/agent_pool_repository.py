@@ -288,6 +288,65 @@ class AgentPoolRepository:
             for row in pool_ids:
                 self._mark_completed_if_drained(conn, row["pool_id"], now=now)
 
+    def slot_for_work(self, work_id: str) -> AgentPoolSlotRecord | None:
+        with self.database._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM agent_pool_slots WHERE current_work_id = ?
+                """,
+                (work_id,),
+            ).fetchone()
+        return None if row is None else self._slot_from_row(row)
+
+    def replace_slot(self, pool_id: str, slot_token: str, *, now: datetime) -> None:
+        with self.database._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT current_work_id FROM agent_pool_slots
+                WHERE pool_id = ? AND slot_token = ?
+                """,
+                (pool_id, slot_token),
+            ).fetchone()
+            if row is None:
+                raise KeyError(slot_token)
+            if row["current_work_id"] is not None:
+                conn.execute(
+                    """
+                    UPDATE agent_work_items
+                    SET status = 'queued', session_id = NULL,
+                        lease_expires_at = NULL, updated_at = ?
+                    WHERE id = ? AND status = 'claimed'
+                    """,
+                    (now.isoformat(), row["current_work_id"]),
+                )
+            conn.execute(
+                """
+                UPDATE agent_pool_slots
+                SET status = 'starting', generation = generation + 1,
+                    current_work_id = NULL, assignment_count = 0,
+                    heartbeat_at = ?
+                WHERE pool_id = ? AND slot_token = ?
+                """,
+                (now.isoformat(), pool_id, slot_token),
+            )
+
+    def requeue_claim(self, work_id: str, *, now: datetime) -> AgentWorkRecord:
+        with self.database._connect() as conn:
+            conn.execute(
+                """
+                UPDATE agent_work_items
+                SET status = 'queued', session_id = NULL,
+                    lease_expires_at = NULL, updated_at = ?
+                WHERE id = ? AND status = 'claimed'
+                """,
+                (now.isoformat(), work_id),
+            )
+            row = conn.execute(
+                "SELECT * FROM agent_work_items WHERE id = ?",
+                (work_id,),
+            ).fetchone()
+        return self._work_from_row(row)
+
     def heartbeat(
         self,
         pool_id: str,

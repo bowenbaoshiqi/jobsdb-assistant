@@ -456,6 +456,16 @@ class AgentWorkCoordinator:
         ):
             raise ValueError("agent session is not the active lease owner")
         task_id = record.internal_key.split(":", 1)[1]
+        pool_slot = self.pool.slot_for_work(work_id)
+        if pool_slot is not None and record.attempt < 2:
+            self.dispatcher.mark_requeued(
+                record.kind,
+                task_id,
+                now=now,
+            )
+            queued = self.pool.requeue_claim(work_id, now=now)
+            self.pool.clear_slot_for_work(work_id, now=now)
+            return queued
         self.dispatcher.mark_failed(
             record.kind,
             task_id,
