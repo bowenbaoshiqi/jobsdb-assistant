@@ -71,9 +71,18 @@ def _print_json(payload: dict) -> None:
 @agent_app.command("start")
 def agent_start(
     port: int = typer.Option(8765, "--port", min=1, max=65535),
+    source: list[Path] = typer.Option([], "--source"),  # noqa: B008
+    update_profile: bool = typer.Option(False, "--update-profile"),
 ) -> None:
     """启动或恢复一个仅暴露不透明工作 ID 的 Agent 会话。"""
-    session = _build_agent_work_coordinator().start(now=datetime.now(UTC))
+    now = datetime.now(UTC)
+    coordinator = _build_agent_work_coordinator()
+    session = coordinator.start(now=now)
+    coordinator.prepare_profile(
+        source_documents=tuple(str(path) for path in source),
+        update=update_profile,
+        now=now,
+    )
     _print_json({
         "protocol_version": 1,
         "state": "active",
