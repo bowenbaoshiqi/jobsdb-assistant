@@ -53,6 +53,49 @@ class RuntimeAgentWorkDispatcher:
         self.workflow = workflow
         self.materials = materials
 
+    def prepare_profile(
+        self,
+        run_id: str,
+        source_documents: list[str],
+        *,
+        update: bool,
+    ) -> object:
+        return self.workflow.prepare_profile(
+            run_id,
+            source_documents,
+            update=update,
+        )
+
+    def submit_profile_result(
+        self,
+        run_id: str,
+        task_id: str,
+        payload: dict,
+    ) -> object:
+        return self.workflow.submit_profile_result(
+            run_id,
+            task_id,
+            payload,
+        )
+
+    def submit_profile_answers(
+        self,
+        run_id: str,
+        source_documents: list[str],
+        answers: dict,
+    ) -> object:
+        return self.workflow.submit_profile_answers(
+            run_id,
+            source_documents,
+            answers,
+        )
+
+    def confirm_profile(self, proposal_id: str) -> object:
+        return self.workflow.confirm_profile(
+            proposal_id,
+            confirmed_at=datetime.now(UTC),
+        )
+
     def submit_evaluation(self, task_id: str, payload: dict) -> object:
         evaluation = self.workflow.submit_evaluation_result(task_id, payload)
         with suppress(KeyError):

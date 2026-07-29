@@ -29,6 +29,7 @@ def add_v08_schema(conn: sqlite3.Connection) -> None:
             task_path TEXT NOT NULL,
             result_path TEXT NOT NULL,
             capability_paths_json TEXT NOT NULL,
+            metadata_json TEXT NOT NULL DEFAULT '{}',
             session_id TEXT REFERENCES agent_sessions(id),
             attempt INTEGER NOT NULL DEFAULT 0,
             lease_expires_at TEXT,

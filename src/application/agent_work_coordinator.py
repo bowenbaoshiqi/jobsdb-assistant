@@ -5,12 +5,14 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Protocol
 
 from src.domain.agent_work import (
+    AgentHumanGate,
     AgentNextResult,
     AgentWorkEnvelope,
     AgentWorkKind,
@@ -30,6 +32,30 @@ class AgentWorkSources(Protocol):
 
 
 class AgentWorkDispatcher(Protocol):
+    def prepare_profile(
+        self,
+        run_id: str,
+        source_documents: list[str],
+        *,
+        update: bool,
+    ) -> object: ...
+
+    def submit_profile_result(
+        self,
+        run_id: str,
+        task_id: str,
+        payload: dict,
+    ) -> object: ...
+
+    def submit_profile_answers(
+        self,
+        run_id: str,
+        source_documents: list[str],
+        answers: dict,
+    ) -> object: ...
+
+    def confirm_profile(self, proposal_id: str) -> object: ...
+
     def submit_evaluation(self, task_id: str, payload: dict) -> object: ...
 
     def submit_material(self, task_id: str, payload: dict) -> object: ...
@@ -56,6 +82,26 @@ class AgentWorkCoordinator:
     def start(self, *, now: datetime) -> AgentSessionRecord:
         self.sync_pending(now=now)
         return self.work.start_session(now=now)
+
+    def prepare_profile(
+        self,
+        *,
+        source_documents: tuple[str, ...],
+        update: bool,
+        now: datetime,
+    ) -> AgentWorkRecord | None:
+        run_id = f"agent-run-{uuid.uuid4().hex}"
+        outcome = self.dispatcher.prepare_profile(
+            run_id,
+            list(source_documents),
+            update=update,
+        )
+        return self._handle_profile_outcome(
+            outcome,
+            run_id=run_id,
+            source_documents=source_documents,
+            now=now,
+        )
 
     def sync_pending(self, *, now: datetime) -> tuple[AgentWorkRecord, ...]:
         created: list[AgentWorkRecord] = []
@@ -98,6 +144,16 @@ class AgentWorkCoordinator:
                 lease_duration=timedelta(minutes=5),
             )
             if claimed is not None:
+                if claimed.kind is AgentWorkKind.HUMAN_RESPONSE:
+                    return AgentNextResult(
+                        state=AgentWorkStatus.HUMAN_REQUIRED,
+                        work=AgentHumanGate(
+                            session=session_id,
+                            work_id=claimed.id,
+                            prompt_path=claimed.task_path,
+                            response_path=claimed.result_path,
+                        ),
+                    )
                 return AgentNextResult(
                     state=AgentWorkStatus.CLAIMED,
                     work=self._envelope(session_id, claimed),
@@ -129,7 +185,33 @@ class AgentWorkCoordinator:
         encoded = supplied_path.read_bytes()
         payload = json.loads(encoded)
         task_id = record.internal_key.split(":", 1)[1]
-        if record.kind is AgentWorkKind.JOB_EVALUATION:
+        profile_outcome = None
+        if record.kind in {
+            AgentWorkKind.CANDIDATE_QUESTIONS,
+            AgentWorkKind.CANDIDATE_PROPOSAL,
+        }:
+            profile_outcome = self.dispatcher.submit_profile_result(
+                record.metadata["run_id"],
+                task_id,
+                payload,
+            )
+        elif record.kind is AgentWorkKind.HUMAN_RESPONSE:
+            action = record.metadata["action"]
+            if action == "candidate_interview_answers":
+                profile_outcome = self.dispatcher.submit_profile_answers(
+                    record.metadata["run_id"],
+                    list(record.metadata["source_documents"]),
+                    payload,
+                )
+            elif action == "candidate_profile_confirmation":
+                if payload.get("approved") is not True:
+                    raise ValueError("explicit profile approval is required")
+                self.dispatcher.confirm_profile(
+                    record.metadata["proposal_id"]
+                )
+            else:
+                raise ValueError(f"unsupported human action: {action}")
+        elif record.kind is AgentWorkKind.JOB_EVALUATION:
             self.dispatcher.submit_evaluation(task_id, payload)
         elif record.kind is AgentWorkKind.APPLICATION_MATERIAL:
             self.dispatcher.submit_material(task_id, payload)
@@ -141,6 +223,16 @@ class AgentWorkCoordinator:
             result_hash=hashlib.sha256(encoded).hexdigest(),
             now=now,
         )
+        if profile_outcome is not None:
+            self._handle_profile_outcome(
+                profile_outcome,
+                run_id=record.metadata["run_id"],
+                source_documents=tuple(
+                    record.metadata["source_documents"]
+                ),
+                now=now,
+                previous_result_path=record.result_path,
+            )
         self.sync_pending(now=now)
         return completed
 
@@ -186,6 +278,116 @@ class AgentWorkCoordinator:
             task_path=str(task_path),
             result_path=str(result_path),
             capability_paths=tuple(task.get("capability_paths", ())),
+            now=now,
+        )
+
+    def _handle_profile_outcome(
+        self,
+        outcome,
+        *,
+        run_id: str,
+        source_documents: tuple[str, ...],
+        now: datetime,
+        previous_result_path: str | None = None,
+    ) -> AgentWorkRecord | None:
+        status = outcome.status.value
+        if status == "ready":
+            return None
+        if status == "waiting_for_agent":
+            if outcome.task_id is None:
+                raise ValueError("profile Agent task ID is required")
+            task_path = self.tasks_root / outcome.task_id / "task.json"
+            task = json.loads(task_path.read_text(encoding="utf-8"))
+            kind = (
+                AgentWorkKind.CANDIDATE_PROPOSAL
+                if task.get("interview_complete") is True
+                else AgentWorkKind.CANDIDATE_QUESTIONS
+            )
+            return self.work.enqueue(
+                kind=kind,
+                internal_key=f"profile:{outcome.task_id}",
+                task_path=str(task_path),
+                result_path=str(
+                    self.tasks_root
+                    / outcome.task_id
+                    / "agent-result.json"
+                ),
+                capability_paths=tuple(
+                    task.get("capability_paths", ())
+                ),
+                metadata={
+                    "run_id": run_id,
+                    "source_documents": list(source_documents),
+                },
+                now=now,
+            )
+        if status == "needs_answers":
+            questions = [
+                item.model_dump(mode="json")
+                for item in outcome.questions
+            ]
+            return self._enqueue_human(
+                internal_key=f"human:answers:{run_id}",
+                prompt={
+                    "action": "candidate_interview_answers",
+                    "questions": questions,
+                },
+                metadata={
+                    "action": "candidate_interview_answers",
+                    "run_id": run_id,
+                    "source_documents": list(source_documents),
+                },
+                now=now,
+            )
+        if status == "waiting_for_user":
+            if outcome.proposal_id is None:
+                raise ValueError("profile proposal ID is required")
+            return self._enqueue_human(
+                internal_key=f"human:confirm:{outcome.proposal_id}",
+                prompt={
+                    "action": "candidate_profile_confirmation",
+                    "proposal_result_path": previous_result_path,
+                },
+                metadata={
+                    "action": "candidate_profile_confirmation",
+                    "run_id": run_id,
+                    "source_documents": list(source_documents),
+                    "proposal_id": outcome.proposal_id,
+                },
+                now=now,
+            )
+        raise ValueError(f"unsupported profile outcome: {status}")
+
+    def _enqueue_human(
+        self,
+        *,
+        internal_key: str,
+        prompt: dict,
+        metadata: dict,
+        now: datetime,
+    ) -> AgentWorkRecord:
+        digest = hashlib.sha256(internal_key.encode("utf-8")).hexdigest()[:16]
+        directory = self.tasks_root.parent / "agent-human" / digest
+        directory.mkdir(parents=True, exist_ok=True)
+        prompt_path = directory / "prompt.json"
+        temporary = prompt_path.with_suffix(".json.tmp")
+        temporary.write_text(
+            json.dumps(
+                prompt,
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            ),
+            encoding="utf-8",
+        )
+        temporary.replace(prompt_path)
+        return self.work.enqueue(
+            kind=AgentWorkKind.HUMAN_RESPONSE,
+            internal_key=internal_key,
+            task_path=str(prompt_path),
+            result_path=str(directory / "response.json"),
+            capability_paths=(),
+            metadata=metadata,
             now=now,
         )
 

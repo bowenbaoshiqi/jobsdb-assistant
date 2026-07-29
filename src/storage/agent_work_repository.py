@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import datetime, timedelta
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -38,6 +39,7 @@ class AgentWorkRecord(BaseModel):
     task_path: str
     result_path: str
     capability_paths: tuple[str, ...]
+    metadata: dict[str, Any]
     session_id: str | None = None
     attempt: int
     lease_expires_at: datetime | None = None
@@ -78,6 +80,7 @@ class AgentWorkRepository:
         task_path: str,
         result_path: str,
         capability_paths: tuple[str, ...],
+        metadata: dict[str, Any] | None = None,
         now: datetime,
     ) -> AgentWorkRecord:
         if not internal_key:
@@ -85,6 +88,12 @@ class AgentWorkRepository:
         encoded_paths = json.dumps(
             list(capability_paths),
             ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        encoded_metadata = json.dumps(
+            metadata or {},
+            ensure_ascii=False,
+            sort_keys=True,
             separators=(",", ":"),
         )
         with self.database._connect() as conn:
@@ -99,12 +108,14 @@ class AgentWorkRepository:
                     task_path,
                     result_path,
                     tuple(capability_paths),
+                    metadata or {},
                 )
                 actual = (
                     record.kind,
                     record.task_path,
                     record.result_path,
                     record.capability_paths,
+                    record.metadata,
                 )
                 if actual != expected:
                     raise ValueError(
@@ -117,8 +128,9 @@ class AgentWorkRepository:
                 """
                 INSERT INTO agent_work_items (
                     id, internal_key, kind, status, task_path, result_path,
-                    capability_paths_json, created_at, updated_at
-                ) VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?)
+                    capability_paths_json, metadata_json, created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     work_id,
@@ -127,6 +139,7 @@ class AgentWorkRepository:
                     task_path,
                     result_path,
                     encoded_paths,
+                    encoded_metadata,
                     timestamp,
                     timestamp,
                 ),
@@ -402,6 +415,7 @@ class AgentWorkRepository:
             task_path=row["task_path"],
             result_path=row["result_path"],
             capability_paths=tuple(json.loads(row["capability_paths_json"])),
+            metadata=json.loads(row["metadata_json"]),
             session_id=row["session_id"],
             attempt=row["attempt"],
             lease_expires_at=(

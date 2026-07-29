@@ -10,11 +10,11 @@ from src.application.candidate_onboarding import (
     OnboardingOutcome,
     OnboardingStatus,
 )
+from src.domain.agent_work import AgentWorkKind, AgentWorkStatus
 from src.domain.candidate_interview import (
     InterviewDimension,
     InterviewQuestion,
 )
-from src.domain.agent_work import AgentWorkKind, AgentWorkStatus
 from src.storage.agent_work_repository import AgentWorkRepository
 from src.storage.database import Database
 
