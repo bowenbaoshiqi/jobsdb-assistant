@@ -27,7 +27,7 @@ def test_database_applies_v06_schema_once(tmp_path: Path) -> None:
             ).fetchall()
         }
 
-    assert versions[-1] == (7,)
+    assert versions[-1] == (8,)
     assert versions.count((6,)) == 1
     assert {
         "id",
