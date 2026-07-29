@@ -66,6 +66,7 @@ def result_payload(codes: str = "ABCDEF") -> dict:
             "engine_version": "career-ops@locked",
             "engine_commit": "c" * 40,
             "prompt_version": "career-ops-native-af.v1",
+            "jd_summary_zh_cn": "该职位负责企业级人工智能平台建设与交付。",
             "overall_score": 4.2,
             "dimensions": [
                 {
@@ -130,6 +131,25 @@ def test_evaluation_adapter_accepts_matching_native_result() -> None:
     evaluations = adapter.validate_result(task, result_payload())
 
     assert evaluations[0].overall_score == 4.2
+    assert evaluations[0].jd_summary_zh_cn.startswith("该职位")
+
+
+def test_evaluation_adapter_rejects_missing_chinese_jd_summary() -> None:
+    adapter = JobEvaluationAdapter(
+        "c" * 40,
+        "career-ops-native-af.v1",
+    )
+    task = adapter.build_task(
+        "evaluation-run-1",
+        profile(),
+        bundle(),
+        [snapshot()],
+    )
+    payload = result_payload()
+    del payload["evaluations"][0]["jd_summary_zh_cn"]
+
+    with pytest.raises(ValueError, match="Chinese JD summary"):
+        adapter.validate_result(task, payload)
 
 
 def test_evaluation_adapter_rejects_missing_native_block() -> None:
