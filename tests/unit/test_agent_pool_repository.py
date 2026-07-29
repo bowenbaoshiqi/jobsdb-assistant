@@ -102,7 +102,7 @@ def test_pool_claim_requires_all_slots_ready_and_prevents_duplicate_claim(
 
     assert first is not None
     assert first.status is AgentWorkStatus.CLAIMED
-    assert duplicate is first
+    assert duplicate == first
 
 
 def test_pool_enforces_five_assignments_per_generation(tmp_path) -> None:
@@ -152,4 +152,3 @@ def test_stop_pool_releases_claimed_work(tmp_path) -> None:
 
     assert [item.work_id for item in released] == [claimed.id]
     assert work.get(claimed.id).status is AgentWorkStatus.QUEUED
-
