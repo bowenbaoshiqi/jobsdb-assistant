@@ -182,3 +182,28 @@ def test_heartbeat_renews_live_slots_and_stale_recovery_requeues_claim(
 
     assert [item.work_id for item in recovered] == [claimed.id]
     assert work.get(claimed.id).status is AgentWorkStatus.QUEUED
+
+
+def test_replacing_slot_resets_assignment_generation(tmp_path) -> None:
+    database, pools, work = _repository(tmp_path)
+    session = AgentWorkRepository(database).start_session(now=NOW)
+    pool = pools.start_pool(
+        session_id=session.id,
+        batch_key="batch-1",
+        assignments=_assignments(work, 1),
+        capability_context_id="cap-v1",
+        profile_context_id="profile-v1",
+        now=NOW,
+    )
+    slot = pool.slots[0]
+    pools.replace_slot(pool.id, slot.slot_token, now=NOW)
+    replaced = pools.ready_slot(
+        pool.id,
+        slot.slot_token,
+        capability_context_id="cap-v1",
+        profile_context_id="profile-v1",
+        now=NOW,
+    )
+
+    assert replaced.generation == 2
+    assert replaced.assignment_count == 0
