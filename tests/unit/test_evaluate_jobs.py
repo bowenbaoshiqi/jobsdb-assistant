@@ -207,6 +207,25 @@ def test_submit_persists_one_native_result(tmp_path: Path) -> None:
     assert repo.find_by_cache_key(task.cache_key) == result
 
 
+def test_submit_fills_server_timestamp_when_agent_omits_it(
+    tmp_path: Path,
+) -> None:
+    repo = FakeEvaluationRepository()
+    evaluator = service(tmp_path, repo)
+    item = snapshot("1", "b")
+    task = evaluator.plan("run-1", profile(), [item]).pending[0]
+    payload = evaluation(item).model_dump(mode="json")
+    payload.pop("created_at")
+
+    saved = evaluator.submit(task, {
+        "task_id": task.task.task_id,
+        "evaluations": [payload],
+    })
+
+    assert saved.created_at is not None
+    assert repo.find_by_cache_key(task.cache_key) == saved
+
+
 def test_pending_task_can_be_reloaded_after_agent_checkpoint(
     tmp_path: Path,
 ) -> None:
