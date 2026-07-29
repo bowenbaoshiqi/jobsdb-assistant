@@ -127,6 +127,16 @@ def test_next_returns_an_opaque_envelope(tmp_path) -> None:
     )
 
 
+def test_start_reuses_the_active_agent_session(tmp_path) -> None:
+    coordinator = _coordinator(tmp_path, sources=FakeSources())
+    now = datetime.now(UTC)
+
+    first = coordinator.start(now=now)
+    second = coordinator.start(now=now)
+
+    assert second.id == first.id
+
+
 def test_submit_dispatches_by_persisted_kind_not_user_input(tmp_path) -> None:
     now = datetime.now(UTC)
     tasks_root = tmp_path / "workspace" / "ai-tasks"

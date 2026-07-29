@@ -43,6 +43,19 @@ def test_enqueue_hides_internal_identity_and_deduplicates(tmp_path) -> None:
     assert session.status is AgentSessionStatus.ACTIVE
 
 
+def test_start_or_resume_reuses_the_active_session(tmp_path) -> None:
+    now = datetime.now(UTC)
+    repository = AgentWorkRepository(Database(str(tmp_path / "jobs.db")))
+
+    first = repository.start_or_resume_session(now=now)
+    second = repository.start_or_resume_session(
+        now=now + timedelta(minutes=1)
+    )
+
+    assert second.id == first.id
+    assert second.heartbeat_at == now + timedelta(minutes=1)
+
+
 def test_enqueue_rejects_changed_identity_for_existing_key(tmp_path) -> None:
     now = datetime.now(UTC)
     repository = AgentWorkRepository(Database(str(tmp_path / "jobs.db")))
