@@ -175,7 +175,7 @@ class DashboardQueryService:
             canonical_url=snapshot.canonical_url,
             apply_type=snapshot.apply_type,
             jd_text=(
-                evaluation.jd_summary_zh_cn
+                evaluation.jd_translation_zh_cn
                 or snapshot.jd_text
             ),
             evaluation_status="evaluated",

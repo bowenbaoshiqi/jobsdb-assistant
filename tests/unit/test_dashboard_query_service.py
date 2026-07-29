@@ -93,7 +93,7 @@ def _save_evaluation(
         engine_version="career-ops@01bf8b4",
         engine_commit="b" * 40,
         prompt_version="career-ops-native-af.v1",
-        jd_summary_zh_cn="负责企业级人工智能架构与平台交付。",
+        jd_translation_zh_cn="完整翻译：负责企业级人工智能架构与平台交付。",
         overall_score=4.6,
         dimensions=[
             NativeDimension(
@@ -158,7 +158,7 @@ def test_defaults_to_evaluated_jobs_and_preserves_native_trace() -> None:
     assert page.jobs[0].dimensions[0].evidence == ["原文：JD: direct evidence"]
     assert page.jobs[0].recommendation == "强烈建议申请"
     assert page.jobs[0].strengths == ["原文：Enterprise AI leadership"]
-    assert page.jobs[0].jd_text == "负责企业级人工智能架构与平台交付。"
+    assert page.jobs[0].jd_text == "完整翻译：负责企业级人工智能架构与平台交付。"
     assert page.jobs[0].profile_summary.target_roles == ["Head of AI"]
     assert page.jobs[0].provenance.engine_commit == "b" * 40
 

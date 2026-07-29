@@ -132,9 +132,10 @@ For every pending task:
 4. Run career-ops evaluation-only reasoning against that native candidate
    context and the single JD.
 5. Preserve native ordered A-F blocks and the native 1.0–5.0 overall score.
-   Include a concise but complete `jd_summary_zh_cn` 简体中文 JD 摘要 covering
-   the role purpose, core responsibilities, requirements, and any stated
-   salary or employment terms. Do not invent missing information.
+   Include `jd_translation_zh_cn`, a faithful full 简体中文 JD 翻译. Translate
+   every section of the captured JD, including company information,
+   responsibilities, requirements, salary, benefits, and employment terms.
+   Do not summarize, omit sections, or invent missing information.
 6. Save schema-valid JSON to
    `workspace/ai-tasks/<task_id>/agent-result.json`.
 7. Submit it:

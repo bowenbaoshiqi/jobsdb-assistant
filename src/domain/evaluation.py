@@ -47,7 +47,7 @@ class JobEvaluation(BaseModel):
         pattern=r"^[a-f0-9]{40}$",
     )
     prompt_version: str
-    jd_summary_zh_cn: str | None = Field(default=None, min_length=1)
+    jd_translation_zh_cn: str | None = Field(default=None, min_length=1)
     overall_score: float = Field(ge=1.0, le=5.0)
     dimensions: list[NativeDimension] = Field(default_factory=list)
     recommendation: str

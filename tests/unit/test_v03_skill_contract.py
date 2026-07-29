@@ -20,7 +20,7 @@ def test_skill_uses_python_as_state_authority(path: Path) -> None:
     assert "workflow evaluation-prepare" in text
     assert "workflow evaluation-submit" in text
     assert "workflow evaluation-next" in text
-    assert "简体中文 JD 摘要" in text
+    assert "简体中文 JD 翻译" in text
     assert "workflow report" in text
     assert "workflow material-pending" in text
     assert "workflow material-submit" in text

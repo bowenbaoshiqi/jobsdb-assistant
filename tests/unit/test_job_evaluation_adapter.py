@@ -66,7 +66,7 @@ def result_payload(codes: str = "ABCDEF") -> dict:
             "engine_version": "career-ops@locked",
             "engine_commit": "c" * 40,
             "prompt_version": "career-ops-native-af.v1",
-            "jd_summary_zh_cn": "该职位负责企业级人工智能平台建设与交付。",
+            "jd_translation_zh_cn": "完整翻译：Synthetic JD",
             "overall_score": 4.2,
             "dimensions": [
                 {
@@ -131,10 +131,10 @@ def test_evaluation_adapter_accepts_matching_native_result() -> None:
     evaluations = adapter.validate_result(task, result_payload())
 
     assert evaluations[0].overall_score == 4.2
-    assert evaluations[0].jd_summary_zh_cn.startswith("该职位")
+    assert evaluations[0].jd_translation_zh_cn.startswith("完整翻译")
 
 
-def test_evaluation_adapter_rejects_missing_chinese_jd_summary() -> None:
+def test_evaluation_adapter_rejects_missing_full_chinese_jd_translation() -> None:
     adapter = JobEvaluationAdapter(
         "c" * 40,
         "career-ops-native-af.v1",
@@ -146,9 +146,9 @@ def test_evaluation_adapter_rejects_missing_chinese_jd_summary() -> None:
         [snapshot()],
     )
     payload = result_payload()
-    del payload["evaluations"][0]["jd_summary_zh_cn"]
+    del payload["evaluations"][0]["jd_translation_zh_cn"]
 
-    with pytest.raises(ValueError, match="Chinese JD summary"):
+    with pytest.raises(ValueError, match="full Chinese JD translation"):
         adapter.validate_result(task, payload)
 
 
