@@ -385,6 +385,26 @@ class AgentWorkRepository:
             raise KeyError(work_id)
         return self._work_from_row(row)
 
+    def first_open_by_kinds(
+        self,
+        kinds: tuple[AgentWorkKind, ...],
+    ) -> AgentWorkRecord | None:
+        if not kinds:
+            return None
+        placeholders = ", ".join("?" for _ in kinds)
+        with self.database._connect() as conn:
+            row = conn.execute(
+                f"""
+                SELECT * FROM agent_work_items
+                WHERE kind IN ({placeholders})
+                  AND status IN ('queued', 'claimed', 'human_required')
+                ORDER BY created_at, id
+                LIMIT 1
+                """,
+                tuple(kind.value for kind in kinds),
+            ).fetchone()
+        return None if row is None else self._work_from_row(row)
+
     @staticmethod
     def _recover_expired_in_connection(conn, *, now: datetime) -> int:
         cursor = conn.execute(

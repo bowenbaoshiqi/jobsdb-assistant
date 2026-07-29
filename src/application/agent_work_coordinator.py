@@ -90,6 +90,15 @@ class AgentWorkCoordinator:
         update: bool,
         now: datetime,
     ) -> AgentWorkRecord | None:
+        existing = self.work.first_open_by_kinds(
+            (
+                AgentWorkKind.CANDIDATE_QUESTIONS,
+                AgentWorkKind.CANDIDATE_PROPOSAL,
+                AgentWorkKind.HUMAN_RESPONSE,
+            )
+        )
+        if existing is not None:
+            return existing
         run_id = f"agent-run-{uuid.uuid4().hex}"
         outcome = self.dispatcher.prepare_profile(
             run_id,
