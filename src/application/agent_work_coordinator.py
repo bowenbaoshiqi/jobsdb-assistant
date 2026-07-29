@@ -322,7 +322,7 @@ class AgentWorkCoordinator:
             internal_key=f"{prefix}:{task_id}",
             task_path=str(task_path),
             result_path=str(result_path),
-            capability_paths=tuple(task.get("capability_paths", ())),
+            capability_paths=self._capability_paths(task),
             now=now,
         )
 
@@ -357,9 +357,7 @@ class AgentWorkCoordinator:
                     / outcome.task_id
                     / "agent-result.json"
                 ),
-                capability_paths=tuple(
-                    task.get("capability_paths", ())
-                ),
+                capability_paths=self._capability_paths(task),
                 metadata={
                     "run_id": run_id,
                     "source_documents": list(source_documents),
@@ -435,6 +433,22 @@ class AgentWorkCoordinator:
             metadata=metadata,
             now=now,
         )
+
+    def _capability_paths(self, task: dict) -> tuple[str, ...]:
+        project_root = self.tasks_root.parents[1]
+        integration_id = task.get("integration_id")
+        integration_root = (
+            project_root / "integrations" / integration_id
+            if integration_id
+            else project_root
+        )
+        resolved: list[str] = []
+        for raw_path in task.get("capability_paths", ()):
+            path = Path(raw_path)
+            if not path.is_absolute():
+                path = integration_root / path
+            resolved.append(str(path.resolve()))
+        return tuple(resolved)
 
     @staticmethod
     def _envelope(
