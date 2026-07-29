@@ -135,7 +135,23 @@ def test_agent_doctor_reports_ready_and_missing_locked_integrations(
     tmp_path,
 ) -> None:
     manifest = SimpleNamespace(
-        integrations={"candidate-profile": object(), "job-evaluation": object()}
+        integrations={
+            "application-material": SimpleNamespace(
+                url="https://example.test/ai-job-search.git",
+                commit="a" * 40,
+                required_paths=(),
+            ),
+            "candidate-profile": SimpleNamespace(
+                url="https://example.test/ai-job-search.git",
+                commit="a" * 40,
+                required_paths=(),
+            ),
+            "job-evaluation": SimpleNamespace(
+                url="https://example.test/career-ops.git",
+                commit="b" * 40,
+                required_paths=(),
+            ),
+        }
     )
 
     class Manager:
@@ -149,6 +165,9 @@ def test_agent_doctor_reports_ready_and_missing_locked_integrations(
                     if integration_id == "candidate-profile"
                     else "missing"
                 )
+                ,
+                path=tmp_path / "integrations" / integration_id,
+                commit="a" * 40,
             )
 
     monkeypatch.setattr("src.agent.doctor.Database", _Database)
@@ -175,6 +194,7 @@ def test_agent_doctor_reports_ready_and_missing_locked_integrations(
 
     assert by_name["database"]["status"] == "pass"
     assert by_name["integration:candidate-profile"]["status"] == "pass"
+    assert by_name["integration:application-material"]["status"] == "pass"
     assert by_name["integration:job-evaluation"]["status"] == "warn"
     assert by_name["privacy"]["status"] == "pass"
     assert by_name["dashboard"]["status"] == "pass"
