@@ -88,6 +88,28 @@ def test_agent_next_prints_one_machine_readable_result(monkeypatch) -> None:
     coordinator.next.assert_called_once()
 
 
+def test_agent_doctor_prints_structured_sanitized_checks(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "src.main._run_agent_doctor",
+        lambda port: (
+            {
+                "name": "database",
+                "status": "pass",
+                "detail": "schema 8 ready",
+            },
+        ),
+    )
+
+    result = runner.invoke(app, ["agent", "doctor", "--port", "8877"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "ready"
+    assert payload["checks"][0]["detail"] == "schema 8 ready"
+
+
 def test_agent_submit_accepts_only_opaque_work_id(
     monkeypatch,
     tmp_path,
