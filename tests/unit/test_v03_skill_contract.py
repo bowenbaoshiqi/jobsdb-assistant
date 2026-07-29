@@ -20,6 +20,12 @@ def test_skill_uses_python_as_state_authority(path: Path) -> None:
     assert "agent submit" in text
     assert "agent fail" in text
     assert "agent stop" in text
+    assert "agent pool start" in text
+    assert "agent pool ready" in text
+    assert "agent pool claim" in text
+    assert "agent pool heartbeat" in text
+    assert "requested_concurrency=3" in text
+    assert "nested" in text.casefold()
     assert "Simplified Chinese" in text
     assert "Python and SQLite own" in text
     assert "API key" not in text
@@ -51,3 +57,4 @@ def test_canonical_skill_drains_only_current_batch_evaluations() -> None:
     assert "idle is not completion" in text
     assert "Never send a final response" in text
     assert "work_id" in text
+    assert "retry once" in text.casefold()

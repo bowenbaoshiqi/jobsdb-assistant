@@ -21,6 +21,11 @@ def test_both_skills_use_only_unified_agent_commands() -> None:
         assert "agent listen" in text
         assert "agent next" in text
         assert "agent submit" in text
+        assert "agent pool start" in text
+        assert "agent pool ready" in text
+        assert "agent pool claim" in text
+        assert "agent pool heartbeat" in text
+        assert "requested_concurrency=3" in text
         assert "work_id" in text
         assert all(item not in text for item in forbidden)
 
