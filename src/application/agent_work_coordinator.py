@@ -20,12 +20,12 @@ from src.domain.agent_work import (
     AgentWorkKind,
     AgentWorkStatus,
 )
+from src.storage.agent_pool_repository import AgentPoolRepository
 from src.storage.agent_work_repository import (
     AgentSessionRecord,
     AgentWorkRecord,
     AgentWorkRepository,
 )
-from src.storage.agent_pool_repository import AgentPoolRepository
 
 
 class AgentWorkSources(Protocol):

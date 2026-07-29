@@ -5,7 +5,6 @@ from src.storage.agent_pool_repository import AgentPoolRepository
 from src.storage.agent_work_repository import AgentWorkRepository
 from src.storage.database import Database
 
-
 NOW = datetime(2026, 7, 29, 9, 0, tzinfo=UTC)
 
 

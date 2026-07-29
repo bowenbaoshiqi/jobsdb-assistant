@@ -1,12 +1,9 @@
 from datetime import UTC, datetime, timedelta
 
-import pytest
-
 from src.domain.agent_work import AgentWorkKind, AgentWorkStatus
 from src.storage.agent_pool_repository import AgentPoolRepository
 from src.storage.agent_work_repository import AgentWorkRepository
 from src.storage.database import Database
-
 
 NOW = datetime(2026, 7, 29, 8, 30, tzinfo=UTC)
 

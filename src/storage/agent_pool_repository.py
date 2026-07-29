@@ -10,15 +10,13 @@ from src.domain.agent_pool import (
     AgentPoolSlotRecord,
     AgentPoolSlotStatus,
     AgentPoolStatus,
-    AgentPoolStatusSnapshot,
 )
-from src.domain.agent_work import AgentWorkKind, AgentWorkStatus
+from src.domain.agent_work import AgentWorkStatus
 from src.storage.agent_work_repository import (
     AgentWorkRecord,
     RecoveredAgentWork,
 )
 from src.storage.database import Database
-
 
 _LEASE = timedelta(minutes=5)
 _STALE_AFTER = timedelta(seconds=90)
@@ -236,6 +234,7 @@ class AgentPoolRepository:
                 """,
                 (now.isoformat(), pool_id, slot_token),
             )
+            self._mark_completed_if_drained(conn, pool_id, now=now)
 
     def get_slot(self, pool_id: str, slot_token: str) -> AgentPoolSlotRecord:
         with self.database._connect() as conn:
@@ -274,6 +273,10 @@ class AgentPoolRepository:
 
     def clear_slot_for_work(self, work_id: str, *, now: datetime) -> None:
         with self.database._connect() as conn:
+            pool_ids = conn.execute(
+                "SELECT DISTINCT pool_id FROM agent_pool_slots WHERE current_work_id = ?",
+                (work_id,),
+            ).fetchall()
             conn.execute(
                 """
                 UPDATE agent_pool_slots
@@ -282,6 +285,8 @@ class AgentPoolRepository:
                 """,
                 (now.isoformat(), work_id),
             )
+            for row in pool_ids:
+                self._mark_completed_if_drained(conn, row["pool_id"], now=now)
 
     def heartbeat(
         self,
@@ -320,15 +325,15 @@ class AgentPoolRepository:
                 (timestamp, pool_id),
             )
             conn.execute(
-                """
+                f"""
                 UPDATE agent_work_items
                 SET lease_expires_at = ?, updated_at = ?
                 WHERE id IN (
                     SELECT current_work_id FROM agent_pool_slots
-                    WHERE pool_id = ? AND slot_token IN ({})
+                    WHERE pool_id = ? AND slot_token IN ({placeholders})
                       AND current_work_id IS NOT NULL
                 ) AND status = 'claimed'
-                """.format(placeholders),
+                """,
                 (
                     (now + _LEASE).isoformat(),
                     timestamp,
@@ -439,7 +444,11 @@ class AgentPoolRepository:
                 (now.isoformat(), pool_id),
             )
             conn.execute(
-                "UPDATE agent_pool_slots SET status = 'stopped', current_work_id = NULL WHERE pool_id = ?",
+                """
+                UPDATE agent_pool_slots
+                SET status = 'stopped', current_work_id = NULL
+                WHERE pool_id = ?
+                """,
                 (pool_id,),
             )
             conn.execute(
@@ -460,6 +469,25 @@ class AgentPoolRepository:
             recovery_reason="session_stopped",
         )
 
+    @staticmethod
+    def _mark_completed_if_drained(conn, pool_id: str, *, now: datetime) -> None:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) AS count FROM agent_evaluation_batch_tasks AS batch
+            JOIN agent_work_items AS work ON work.id = batch.work_id
+            WHERE batch.pool_id = ? AND work.status IN ('queued', 'claimed')
+            """,
+            (pool_id,),
+        ).fetchone()
+        if row["count"] == 0:
+            conn.execute(
+                """
+                UPDATE agent_pools SET status = 'completed', completed_at = ?
+                WHERE id = ? AND status IN ('active', 'draining')
+                """,
+                (now.isoformat(), pool_id),
+            )
+
     def _pool_from_conn(self, conn, pool_id: str) -> AgentPoolRecord:
         row = conn.execute(
             "SELECT * FROM agent_pools WHERE id = ?", (pool_id,)
@@ -479,7 +507,11 @@ class AgentPoolRepository:
             profile_context_id=row["profile_context_id"],
             created_at=datetime.fromisoformat(row["created_at"]),
             heartbeat_at=datetime.fromisoformat(row["heartbeat_at"]),
-            completed_at=(None if row["completed_at"] is None else datetime.fromisoformat(row["completed_at"])),
+            completed_at=(
+                None
+                if row["completed_at"] is None
+                else datetime.fromisoformat(row["completed_at"])
+            ),
             slots=tuple(self._slot_from_row(item) for item in slots),
         )
 
@@ -490,7 +522,11 @@ class AgentPoolRepository:
             ordinal=row["ordinal"], status=row["status"],
             generation=row["generation"], current_work_id=row["current_work_id"],
             assignment_count=row["assignment_count"],
-            heartbeat_at=(None if row["heartbeat_at"] is None else datetime.fromisoformat(row["heartbeat_at"])),
+            heartbeat_at=(
+                None
+                if row["heartbeat_at"] is None
+                else datetime.fromisoformat(row["heartbeat_at"])
+            ),
         )
 
     @staticmethod

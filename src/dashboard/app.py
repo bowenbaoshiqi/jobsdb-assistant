@@ -17,8 +17,8 @@ from src.dashboard.material_routes import material_router
 from src.dashboard.material_service import DashboardMaterialService
 from src.dashboard.query_service import DashboardQueryService
 from src.dashboard.routes import register_routes
-from src.storage.database import Database
 from src.storage.agent_pool_repository import AgentPoolRepository
+from src.storage.database import Database
 from src.storage.job_batch_repository import JobBatchRepository
 from src.storage.selection_repository import SelectionRepository
 from src.version import __version__

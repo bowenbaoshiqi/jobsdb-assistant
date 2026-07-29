@@ -117,6 +117,7 @@ def test_discovery_migration_is_applied_once(tmp_path) -> None:
         (7,),
         (8,),
         (9,),
+        (10,),
     ]
     assert {
         "apply_type",

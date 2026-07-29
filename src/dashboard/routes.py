@@ -16,10 +16,10 @@ from src.dashboard.application_service import (
 )
 from src.dashboard.schemas import DashboardFilters
 from src.domain.job import ApplyType
+from src.storage.agent_pool_repository import AgentPoolRepository
 from src.storage.dashboard_application_repository import (
     ApplicationBusyError,
 )
-from src.storage.agent_pool_repository import AgentPoolRepository
 from src.storage.job_batch_repository import ActiveDiscoveryError
 from src.version import __version__
 

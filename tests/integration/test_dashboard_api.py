@@ -8,21 +8,20 @@ from fastapi.testclient import TestClient
 
 from src.dashboard.app import DashboardDependencies, create_dashboard_app
 from src.dashboard.application_service import DashboardApplicationService
-from src.dashboard.evaluation_progress import EvaluationProgressStore
+from src.dashboard.evaluation_progress import EvaluationProgressStore, EvaluationTaskStatus
 from src.dashboard.query_service import DashboardQueryService
+from src.domain.agent_work import AgentWorkKind
 from src.domain.application_execution import (
     ApplicationExecution,
     ApplicationExecutionStatus,
     ApplicationIdentity,
 )
 from src.domain.job import ApplyType, JobDetailCapture
-from src.storage.database import Database
 from src.storage.agent_pool_repository import AgentPoolRepository
 from src.storage.agent_work_repository import AgentWorkRepository
+from src.storage.database import Database
 from src.storage.job_batch_repository import JobBatchRepository
 from src.storage.selection_repository import SelectionRepository
-from src.domain.agent_work import AgentWorkKind
-from src.dashboard.evaluation_progress import EvaluationTaskStatus
 
 NOW = datetime(2026, 7, 27, 9, 0, tzinfo=UTC)
 
@@ -169,7 +168,7 @@ def test_evaluation_progress_prefers_sqlite_pool_state_over_legacy_json(
         capability_paths=("/private/capability.md",),
         now=NOW,
     )
-    pool = AgentPoolRepository(dependencies.database).start_pool(
+    AgentPoolRepository(dependencies.database).start_pool(
         session_id=session.id,
         batch_key="batch-1",
         assignments=((record.id, 1, 1),),
