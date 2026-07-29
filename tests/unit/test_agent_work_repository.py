@@ -72,6 +72,28 @@ def test_enqueue_rejects_changed_identity_for_existing_key(tmp_path) -> None:
         )
 
 
+def test_enqueue_reconciles_legacy_relative_capability_paths(tmp_path) -> None:
+    now = datetime.now(UTC)
+    repository = AgentWorkRepository(Database(str(tmp_path / "jobs.db")))
+    first = _enqueue(repository, now=now)
+
+    second = repository.enqueue(
+        kind=AgentWorkKind.JOB_EVALUATION,
+        internal_key="evaluation:private-task-id",
+        task_path="workspace/ai-tasks/private-task-id/task.json",
+        result_path="workspace/ai-tasks/private-task-id/agent-result.json",
+        capability_paths=(
+            "/private/project/integrations/job-evaluation/capability.md",
+        ),
+        now=now + timedelta(seconds=1),
+    )
+
+    assert second.id == first.id
+    assert second.capability_paths == (
+        "/private/project/integrations/job-evaluation/capability.md",
+    )
+
+
 def test_expired_claim_is_recovered_once(tmp_path) -> None:
     now = datetime.now(UTC)
     repository = AgentWorkRepository(Database(str(tmp_path / "jobs.db")))

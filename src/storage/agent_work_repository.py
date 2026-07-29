@@ -125,6 +125,7 @@ class AgentWorkRepository:
             sort_keys=True,
             separators=(",", ":"),
         )
+        timestamp = now.isoformat()
         with self.database._connect() as conn:
             existing = conn.execute(
                 "SELECT * FROM agent_work_items WHERE internal_key = ?",
@@ -147,12 +148,37 @@ class AgentWorkRepository:
                     record.metadata,
                 )
                 if actual != expected:
-                    raise ValueError(
-                        "work identity already exists with different data"
+                    stable_actual = (
+                        record.kind,
+                        record.task_path,
+                        record.result_path,
+                        record.metadata,
                     )
+                    stable_expected = (
+                        kind,
+                        task_path,
+                        result_path,
+                        metadata or {},
+                    )
+                    if stable_actual != stable_expected:
+                        raise ValueError(
+                            "work identity already exists with different data"
+                        )
+                    conn.execute(
+                        """
+                        UPDATE agent_work_items
+                        SET capability_paths_json = ?, updated_at = ?
+                        WHERE internal_key = ?
+                        """,
+                        (encoded_paths, timestamp, internal_key),
+                    )
+                    row = conn.execute(
+                        "SELECT * FROM agent_work_items WHERE internal_key = ?",
+                        (internal_key,),
+                    ).fetchone()
+                    return self._work_from_row(row)
                 return record
             work_id = f"work-{uuid.uuid4().hex[:24]}"
-            timestamp = now.isoformat()
             conn.execute(
                 """
                 INSERT INTO agent_work_items (
