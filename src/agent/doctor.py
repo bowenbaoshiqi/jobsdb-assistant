@@ -56,20 +56,43 @@ def run_agent_doctor(
         manifest = load_manifest(root / "integrations" / "manifest.json")
         manager = IntegrationManager(root / "integrations", manifest)
         for integration_id in sorted(manifest.integrations):
+            spec = manifest.integrations[integration_id]
             state = manager.check(integration_id)
+            observed_status = state.status
+            if integration_id == "application-material":
+                candidate_spec = manifest.integrations.get(
+                    "candidate-profile"
+                )
+                if (
+                    candidate_spec is not None
+                    and candidate_spec.url == spec.url
+                    and candidate_spec.commit == spec.commit
+                ):
+                    candidate_state = manager.check("candidate-profile")
+                    observed_status = candidate_state.status
+                    if (
+                        observed_status == "ready"
+                        and any(
+                            not (
+                                candidate_state.path / required
+                            ).exists()
+                            for required in spec.required_paths
+                        )
+                    ):
+                        observed_status = "damaged"
             status: Literal["pass", "warn", "fail"] = (
                 "pass"
-                if state.status == "ready"
+                if observed_status == "ready"
                 else "warn"
-                if state.status == "missing"
+                if observed_status == "missing"
                 else "fail"
             )
             detail = (
                 "locked revision ready"
-                if state.status == "ready"
+                if observed_status == "ready"
                 else "will install locked revision on first profile run"
-                if state.status == "missing"
-                else f"locked checkout is {state.status}"
+                if observed_status == "missing"
+                else f"locked checkout is {observed_status}"
             )
             checks.append(
                 AgentCheck(
