@@ -226,6 +226,40 @@ def test_prepare_profile_queues_the_python_returned_task(tmp_path) -> None:
     assert "run_id" in record.metadata
 
 
+def test_prepare_profile_reuses_unfinished_profile_work(tmp_path) -> None:
+    tasks_root = tmp_path / "workspace" / "ai-tasks"
+    _write_task(tasks_root, "profile-current")
+    task_path = tasks_root / "profile-current" / "task.json"
+    task = json.loads(task_path.read_text(encoding="utf-8"))
+    task["interview_complete"] = False
+    task_path.write_text(json.dumps(task), encoding="utf-8")
+    dispatcher = Mock()
+    dispatcher.prepare_profile.return_value = OnboardingOutcome(
+        status=OnboardingStatus.WAITING_FOR_AGENT,
+        task_id="profile-current",
+    )
+    coordinator = _coordinator(
+        tmp_path,
+        sources=FakeSources(),
+        dispatcher=dispatcher,
+    )
+    now = datetime.now(UTC)
+
+    first = coordinator.prepare_profile(
+        source_documents=("/private/resume.pdf",),
+        update=False,
+        now=now,
+    )
+    second = coordinator.prepare_profile(
+        source_documents=("/private/resume.pdf",),
+        update=False,
+        now=now,
+    )
+
+    assert second == first
+    dispatcher.prepare_profile.assert_called_once()
+
+
 def test_profile_questions_become_a_human_gate(tmp_path) -> None:
     now = datetime.now(UTC)
     tasks_root = tmp_path / "workspace" / "ai-tasks"
