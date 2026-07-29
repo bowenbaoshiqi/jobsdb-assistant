@@ -10,7 +10,12 @@ from src.main import app
 runner = CliRunner()
 
 
-def test_agent_start_prints_session_without_internal_ids(monkeypatch) -> None:
+def test_agent_start_prints_session_without_internal_ids(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    resume = tmp_path / "resume.pdf"
+    resume.write_bytes(b"%PDF")
     coordinator = Mock()
     coordinator.start.return_value = Mock(
         id="agent-session-token",
@@ -21,7 +26,17 @@ def test_agent_start_prints_session_without_internal_ids(monkeypatch) -> None:
         lambda: coordinator,
     )
 
-    result = runner.invoke(app, ["agent", "start", "--port", "8877"])
+    result = runner.invoke(
+        app,
+        [
+            "agent",
+            "start",
+            "--port",
+            "8877",
+            "--source",
+            str(resume),
+        ],
+    )
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
@@ -32,6 +47,11 @@ def test_agent_start_prints_session_without_internal_ids(monkeypatch) -> None:
         "state": "active",
     }
     assert "run_id" not in payload
+    coordinator.prepare_profile.assert_called_once()
+    assert (
+        coordinator.prepare_profile.call_args.kwargs["source_documents"]
+        == (str(resume),)
+    )
 
 
 def test_agent_next_prints_one_machine_readable_result(monkeypatch) -> None:
