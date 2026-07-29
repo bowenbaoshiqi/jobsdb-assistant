@@ -21,6 +21,7 @@ from rich.table import Table
 from config.settings import get_config
 from src.accounts.registry import Account, AccountRegistry
 from src.doctor import CheckStatus, run_checks
+from src.domain.agent_work import AgentWorkStatus
 from src.jobsdb.search import normalize_keyword
 from src.monitor.logger import configure_logger
 from src.orchestrator import Orchestrator
@@ -131,6 +132,23 @@ def agent_next(
         wait_seconds=wait,
     )
     _print_json(result.model_dump(mode="json"))
+
+
+@agent_app.command("listen")
+def agent_listen(
+    session: str = typer.Option(..., "--session"),
+) -> None:
+    """持续监听，队列暂时为空时不退出 Agent 工具调用。"""
+    coordinator = _build_agent_work_coordinator()
+    while True:
+        result = coordinator.next(
+            session,
+            wait_seconds=30,
+        )
+        if result.state is AgentWorkStatus.IDLE:
+            continue
+        _print_json(result.model_dump(mode="json"))
+        return
 
 
 @agent_app.command("submit")

@@ -27,11 +27,15 @@ The command returns the exact session and Dashboard URL. Report the URL and
 enter the loop. Dashboard archive/search and material actions feed this same
 session automatically.
 
-## Loop
+## Persistent loop
 
 ```bash
-uv run jobsdb-assistant agent next --session SESSION --wait 30
+uv run jobsdb-assistant agent listen --session SESSION
 ```
+
+The command deliberately does not return while the queue is temporarily empty.
+If the tool surface yields a running process handle, keep polling that same
+process instead of starting another listener.
 
 - `claimed`: read only the returned `task_path` and `capability_paths`. Write
   schema-valid JSON to the exact `result_path`, then run:
@@ -44,16 +48,16 @@ uv run jobsdb-assistant agent next --session SESSION --wait 30
 - `human_required`: read `prompt_path`, request only the declared human input,
   write it to `response_path`, submit it with the exact same opaque `work_id`,
   and continue. Silence is never approval.
-- `idle`: idle is not completion. Call `agent next` again and provide a short
-  heartbeat at least once per minute.
 - recoverable error: write a sanitized error file, call
   `agent fail --session SESSION --work-id WORK_ID --error ERROR_PATH`, and
   continue other work.
 - `failed`: report the blocker and exact required action.
 - `stopped`: report durable results and end.
 
-Do not send a final answer while the user expects the assistant to remain
-active. On an explicit stop request run:
+After every submit or fail, immediately run `agent listen` again. `agent next`
+is a one-shot diagnostic command only: idle is not completion. Do not send a
+final answer while the user expects the assistant to remain active. On an
+explicit stop request run:
 
 ```bash
 uv run jobsdb-assistant agent stop --session SESSION

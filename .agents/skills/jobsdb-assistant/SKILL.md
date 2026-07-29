@@ -31,13 +31,16 @@ the Dashboard.
 
 ## Work loop
 
-Run:
+Run the persistent listener:
 
 ```bash
-uv run jobsdb-assistant agent next --session SESSION --wait 30
+uv run jobsdb-assistant agent listen --session SESSION
 ```
 
-Handle exactly the returned state:
+The command deliberately does not return while the queue is temporarily empty.
+If the tool surface yields a running process handle, keep polling that same
+process instead of starting another listener. Handle exactly the returned
+state:
 
 - `claimed`: read only `task_path` and the listed `capability_paths`. Reuse
   already loaded capability context when its path and pinned SHA are unchanged
@@ -53,9 +56,6 @@ Handle exactly the returned state:
   human decision or answers, write the response to the exact `response_path`,
   and submit it with the same `agent submit` command. Never infer approval
   from silence.
-- `idle`: idle is not completion. Immediately call `agent next` again. Give a
-  concise heartbeat at least once per minute while the user expects the
-  assistant to remain active.
 - recoverable task error: write a concise sanitized error file and run:
 
   ```bash
@@ -67,8 +67,10 @@ Handle exactly the returned state:
 - `failed`: report the exact sanitized blocker and required user action.
 - `stopped`: report the final durable counts and end.
 
-Never send a final response merely because a queue is temporarily empty.
-Continue until the user explicitly says to stop, then run:
+After every submit or fail, immediately run `agent listen` again. `agent next`
+is a one-shot diagnostic command only: idle is not completion. Never send a final response
+merely because a queue is temporarily empty. Continue until the user explicitly
+says to stop, then run:
 
 ```bash
 uv run jobsdb-assistant agent stop --session SESSION
