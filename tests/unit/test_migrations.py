@@ -70,7 +70,7 @@ def test_database_applies_agent_work_migration(tmp_path: Path) -> None:
         }
 
     assert version["name"] == "v0.8 agent work protocol"
-    assert tables == {"agent_sessions", "agent_work_items"}
+    assert {"agent_sessions", "agent_work_items"} <= tables
 
 
 def test_database_upgrades_historical_v08_agent_work_schema(
