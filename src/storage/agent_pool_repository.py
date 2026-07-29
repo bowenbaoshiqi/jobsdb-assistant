@@ -249,6 +249,38 @@ class AgentPoolRepository:
             raise KeyError(slot_token)
         return self._slot_from_row(row)
 
+    def get_pool(self, pool_id: str) -> AgentPoolRecord:
+        with self.database._connect() as conn:
+            return self._pool_from_conn(conn, pool_id)
+
+    def clear_slot_for_work(self, work_id: str, *, now: datetime) -> None:
+        with self.database._connect() as conn:
+            conn.execute(
+                """
+                UPDATE agent_pool_slots
+                SET status = 'idle', current_work_id = NULL, heartbeat_at = ?
+                WHERE current_work_id = ?
+                """,
+                (now.isoformat(), work_id),
+            )
+
+    def status_counts(self, pool_id: str) -> dict[str, int]:
+        with self.database._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT work.status, COUNT(*) AS count
+                FROM agent_evaluation_batch_tasks AS batch
+                JOIN agent_work_items AS work ON work.id = batch.work_id
+                WHERE batch.pool_id = ?
+                GROUP BY work.status
+                """,
+                (pool_id,),
+            ).fetchall()
+        counts = {status.value: 0 for status in AgentWorkStatus}
+        for row in rows:
+            counts[row["status"]] = row["count"]
+        return counts
+
     def stop_pool(
         self,
         pool_id: str,

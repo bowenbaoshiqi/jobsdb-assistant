@@ -12,6 +12,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Protocol
 
+from src.domain.agent_pool import AgentPoolRecord, AgentPoolSlotRecord
 from src.domain.agent_work import (
     AgentHumanGate,
     AgentNextResult,
@@ -24,6 +25,7 @@ from src.storage.agent_work_repository import (
     AgentWorkRecord,
     AgentWorkRepository,
 )
+from src.storage.agent_pool_repository import AgentPoolRepository
 
 
 class AgentWorkSources(Protocol):
@@ -97,6 +99,7 @@ class AgentWorkCoordinator:
         tasks_root: Path,
         sleeper: Callable[[float], None] = time.sleep,
         now_factory: Callable[[], datetime] | None = None,
+        pool: AgentPoolRepository | None = None,
     ) -> None:
         self.work = work
         self.sources = sources
@@ -104,6 +107,7 @@ class AgentWorkCoordinator:
         self.tasks_root = tasks_root.resolve()
         self.sleeper = sleeper
         self.now_factory = now_factory or (lambda: datetime.now(UTC))
+        self.pool = pool or AgentPoolRepository(work.database)
 
     def start(self, *, now: datetime) -> AgentSessionRecord:
         self.recover_stale_work(now=now)
@@ -138,6 +142,93 @@ class AgentWorkCoordinator:
                 "failed": counts[AgentWorkStatus.FAILED.value],
             },
             "terminal": active == 0,
+        }
+
+    def pool_start(
+        self,
+        *,
+        session_id: str,
+        now: datetime,
+        capability_context_id: str,
+        profile_context_id: str,
+    ) -> AgentPoolRecord:
+        records = self.sync_pending(now=now)
+        evaluations = [
+            record
+            for record in records
+            if record.kind is AgentWorkKind.JOB_EVALUATION
+        ]
+        assignments = tuple(
+            (record.id, ordinal, ((ordinal - 1) % 3) + 1)
+            for ordinal, record in enumerate(evaluations, start=1)
+        )
+        batch_key = hashlib.sha256(
+            "|".join(record.internal_key for record in evaluations).encode()
+        ).hexdigest()
+        return self.pool.start_pool(
+            session_id=session_id,
+            batch_key=batch_key,
+            assignments=assignments,
+            capability_context_id=capability_context_id,
+            profile_context_id=profile_context_id,
+            now=now,
+        )
+
+    def pool_ready(
+        self,
+        *,
+        pool_id: str,
+        slot_token: str,
+        capability_context_id: str,
+        profile_context_id: str,
+        now: datetime,
+    ) -> AgentPoolSlotRecord:
+        return self.pool.ready_slot(
+            pool_id,
+            slot_token,
+            capability_context_id=capability_context_id,
+            profile_context_id=profile_context_id,
+            now=now,
+        )
+
+    def pool_claim(
+        self,
+        *,
+        session_id: str,
+        pool_id: str,
+        slot_token: str,
+        now: datetime,
+    ) -> AgentWorkRecord | None:
+        record = self.pool.claim_for_slot(
+            pool_id,
+            slot_token,
+            now=now,
+        )
+        if record is not None and record.status is AgentWorkStatus.CLAIMED:
+            self.dispatcher.mark_claimed(
+                record.kind,
+                record.internal_key.split(":", 1)[1],
+                now=now,
+            )
+        return record
+
+    def pool_status(self, pool_id: str) -> dict[str, object]:
+        pool = self.pool.get_pool(pool_id)
+        counts = self.pool.status_counts(pool_id)
+        open_count = counts[AgentWorkStatus.QUEUED.value] + counts[
+            AgentWorkStatus.CLAIMED.value
+        ]
+        return {
+            "requested_concurrency": pool.requested_concurrency,
+            "actual_concurrency": pool.actual_concurrency,
+            "pool_state": pool.status.value,
+            "work": {
+                "queued": counts[AgentWorkStatus.QUEUED.value],
+                "claimed": counts[AgentWorkStatus.CLAIMED.value],
+                "completed": counts[AgentWorkStatus.COMPLETED.value],
+                "failed": counts[AgentWorkStatus.FAILED.value],
+            },
+            "terminal": open_count == 0,
         }
 
     def prepare_profile(
@@ -296,6 +387,7 @@ class AgentWorkCoordinator:
             result_hash=hashlib.sha256(encoded).hexdigest(),
             now=now,
         )
+        self.pool.clear_slot_for_work(work_id, now=now)
         if profile_outcome is not None:
             self._handle_profile_outcome(
                 profile_outcome,
@@ -330,12 +422,14 @@ class AgentWorkCoordinator:
             error_message=error_message,
             now=now,
         )
-        return self.work.fail(
+        failed = self.work.fail(
             session_id,
             work_id,
             error_message=error_message,
             now=now,
         )
+        self.pool.clear_slot_for_work(work_id, now=now)
+        return failed
 
     def stop(
         self,

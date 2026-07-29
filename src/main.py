@@ -21,7 +21,7 @@ from rich.table import Table
 from config.settings import get_config
 from src.accounts.registry import Account, AccountRegistry
 from src.doctor import CheckStatus, run_checks
-from src.domain.agent_work import AgentWorkStatus
+from src.domain.agent_work import AgentNextResult, AgentWorkStatus
 from src.jobsdb.search import normalize_keyword
 from src.monitor.logger import configure_logger
 from src.orchestrator import Orchestrator
@@ -43,6 +43,8 @@ dashboard_app = typer.Typer(help="本地职位审核 Dashboard")
 app.add_typer(dashboard_app, name="dashboard")
 agent_app = typer.Typer(help="统一 Agent 工作协议")
 app.add_typer(agent_app, name="agent")
+agent_pool_app = typer.Typer(help="并行职位评分池")
+agent_app.add_typer(agent_pool_app, name="pool")
 
 console = Console()
 
@@ -220,6 +222,135 @@ def agent_status(
     _print_json({
         "protocol_version": 1,
         **status,
+    })
+
+
+def _pool_payload(pool) -> dict:
+    return {
+        "pool": pool.id,
+        "requested_concurrency": pool.requested_concurrency,
+        "actual_concurrency": pool.actual_concurrency,
+        "pool_state": pool.status.value,
+        "slots": [
+            {
+                "slot": slot.slot_token,
+                "ordinal": slot.ordinal,
+                "status": slot.status.value,
+                "generation": slot.generation,
+                "assignment_count": slot.assignment_count,
+            }
+            for slot in pool.slots
+        ],
+        "capability_context": pool.capability_context_id,
+        "profile_context": pool.profile_context_id,
+    }
+
+
+@agent_pool_app.command("start")
+def agent_pool_start(
+    session: str = typer.Option(..., "--session"),
+    capability_context: str = typer.Option(
+        "capability-current", "--capability-context"
+    ),
+    profile_context: str = typer.Option(
+        "profile-current", "--profile-context"
+    ),
+) -> None:
+    """创建当前职位评分的三槽池，不领取任务。"""
+    pool = _build_agent_work_coordinator().pool_start(
+        session_id=session,
+        capability_context_id=capability_context,
+        profile_context_id=profile_context,
+        now=datetime.now(UTC),
+    )
+    _print_json({"protocol_version": 1, **_pool_payload(pool)})
+
+
+@agent_pool_app.command("ready")
+def agent_pool_ready(
+    session: str = typer.Option(..., "--session"),
+    pool: str = typer.Option(..., "--pool"),
+    slot: str = typer.Option(..., "--slot"),
+    capability_context: str = typer.Option(..., "--capability-context"),
+    profile_context: str = typer.Option(..., "--profile-context"),
+) -> None:
+    """登记一个已加载固定上下文的评分 Worker。"""
+    del session
+    record = _build_agent_work_coordinator().pool_ready(
+        pool_id=pool,
+        slot_token=slot,
+        capability_context_id=capability_context,
+        profile_context_id=profile_context,
+        now=datetime.now(UTC),
+    )
+    _print_json({
+        "protocol_version": 1,
+        "pool": record.pool_id,
+        "slot": record.slot_token,
+        "ordinal": record.ordinal,
+        "status": record.status.value,
+    })
+
+
+@agent_pool_app.command("claim")
+def agent_pool_claim(
+    session: str = typer.Option(..., "--session"),
+    pool: str = typer.Option(..., "--pool"),
+    slot: str = typer.Option(..., "--slot"),
+) -> None:
+    """为一个 ready Worker 原子领取一个职位评分任务。"""
+    coordinator = _build_agent_work_coordinator()
+    record = coordinator.pool_claim(
+        session_id=session,
+        pool_id=pool,
+        slot_token=slot,
+        now=datetime.now(UTC),
+    )
+    if record is None:
+        _print_json({
+            "protocol_version": 1,
+            "state": "idle",
+            "pool": pool,
+            "slot": slot,
+        })
+        return
+    _print_json(
+        AgentNextResult(
+            state=AgentWorkStatus.CLAIMED,
+            work=coordinator._envelope(session, record),
+        ).model_dump(mode="json")
+    )
+
+
+@agent_pool_app.command("status")
+def agent_pool_status(
+    session: str = typer.Option(..., "--session"),
+    pool: str = typer.Option(..., "--pool"),
+) -> None:
+    """查看评分池计数，不暴露内部职位或任务 ID。"""
+    del session
+    _print_json({
+        "protocol_version": 1,
+        **_build_agent_work_coordinator().pool_status(pool),
+    })
+
+
+@agent_pool_app.command("stop")
+def agent_pool_stop(
+    session: str = typer.Option(..., "--session"),
+    pool: str = typer.Option(..., "--pool"),
+) -> None:
+    """停止评分池并释放未完成的职位评分。"""
+    del session
+    released = _build_agent_work_coordinator().pool.stop_pool(
+        pool,
+        now=datetime.now(UTC),
+    )
+    _print_json({
+        "protocol_version": 1,
+        "pool": pool,
+        "state": "stopped",
+        "released": len(released),
     })
 
 

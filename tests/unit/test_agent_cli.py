@@ -120,6 +120,41 @@ def test_agent_status_prints_terminal_counts_without_private_ids(
     coordinator.status.assert_called_once()
 
 
+def test_agent_pool_status_prints_counts_without_private_ids(monkeypatch) -> None:
+    coordinator = Mock()
+    coordinator.pool_status.return_value = {
+        "requested_concurrency": 3,
+        "actual_concurrency": 3,
+        "pool_state": "active",
+        "work": {"queued": 12, "claimed": 3, "completed": 0, "failed": 0},
+        "terminal": False,
+    }
+    monkeypatch.setattr(
+        "src.main._build_agent_work_coordinator",
+        lambda: coordinator,
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "agent",
+            "pool",
+            "status",
+            "--session",
+            "agent-session-token",
+            "--pool",
+            "pool-token",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["actual_concurrency"] == 3
+    assert payload["work"]["claimed"] == 3
+    assert "work_id" not in payload
+    coordinator.pool_status.assert_called_once_with("pool-token")
+
+
 def test_agent_listen_does_not_return_when_queue_is_temporarily_idle(
     monkeypatch,
 ) -> None:
