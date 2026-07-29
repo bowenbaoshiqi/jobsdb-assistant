@@ -88,6 +88,46 @@ def test_agent_next_prints_one_machine_readable_result(monkeypatch) -> None:
     coordinator.next.assert_called_once()
 
 
+def test_agent_listen_does_not_return_when_queue_is_temporarily_idle(
+    monkeypatch,
+) -> None:
+    coordinator = Mock()
+    coordinator.next.side_effect = [
+        AgentNextResult(state=AgentWorkStatus.IDLE),
+        AgentNextResult(
+            state=AgentWorkStatus.FAILED,
+            message="synthetic blocker",
+        ),
+    ]
+    monkeypatch.setattr(
+        "src.main._build_agent_work_coordinator",
+        lambda: coordinator,
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "agent",
+            "listen",
+            "--session",
+            "agent-session-token",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == {
+        "message": "synthetic blocker",
+        "protocol_version": 1,
+        "state": "failed",
+        "work": None,
+    }
+    assert coordinator.next.call_count == 2
+    coordinator.next.assert_called_with(
+        "agent-session-token",
+        wait_seconds=30,
+    )
+
+
 def test_agent_doctor_prints_structured_sanitized_checks(
     monkeypatch,
 ) -> None:

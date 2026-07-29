@@ -15,6 +15,7 @@ def test_skill_uses_python_as_state_authority(path: Path) -> None:
 
     assert "agent doctor" in text
     assert "agent start" in text
+    assert "agent listen" in text
     assert "agent next" in text
     assert "agent submit" in text
     assert "agent fail" in text

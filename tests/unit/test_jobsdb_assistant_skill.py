@@ -18,6 +18,7 @@ def test_both_skills_use_only_unified_agent_commands() -> None:
     for path in SKILLS:
         text = path.read_text(encoding="utf-8")
         assert "agent start" in text
+        assert "agent listen" in text
         assert "agent next" in text
         assert "agent submit" in text
         assert "work_id" in text
