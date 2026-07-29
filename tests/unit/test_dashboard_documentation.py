@@ -12,7 +12,10 @@ def test_readme_documents_reproducible_local_dashboard() -> None:
     assert "JobsDB default CV" in readme
     assert "no cover letter" in readme
     assert "Ctrl+C" in readme
-    assert "v0.6.0" in readme
+    assert "v0.8.0" in readme
+    assert "使用 jobsdb-assistant 启动求职助手" in readme
+    assert "无需再次返回 Agent" in readme
+    assert "agent next" in readme
     assert "仅定制求职信" in readme
     assert "定制简历 + 求职信" in readme
     assert "不删除、上传或切换简历" in readme
