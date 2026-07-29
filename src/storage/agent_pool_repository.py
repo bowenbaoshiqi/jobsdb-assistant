@@ -265,6 +265,13 @@ class AgentPoolRepository:
             ).fetchall()
         return tuple(row["id"] for row in rows)
 
+    def latest_pool_id(self) -> str | None:
+        with self.database._connect() as conn:
+            row = conn.execute(
+                "SELECT id FROM agent_pools ORDER BY created_at DESC, id DESC LIMIT 1"
+            ).fetchone()
+        return None if row is None else row["id"]
+
     def clear_slot_for_work(self, work_id: str, *, now: datetime) -> None:
         with self.database._connect() as conn:
             conn.execute(

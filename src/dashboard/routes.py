@@ -19,6 +19,7 @@ from src.domain.job import ApplyType
 from src.storage.dashboard_application_repository import (
     ApplicationBusyError,
 )
+from src.storage.agent_pool_repository import AgentPoolRepository
 from src.storage.job_batch_repository import ActiveDiscoveryError
 from src.version import __version__
 
@@ -91,6 +92,22 @@ def register_routes(app: FastAPI, dependencies) -> None:
 
     @app.get("/api/evaluation-progress")
     async def evaluation_progress():
+        pool_repository = AgentPoolRepository(dependencies.database)
+        pool_id = pool_repository.latest_pool_id()
+        if pool_id is not None:
+            pool = pool_repository.get_pool(pool_id)
+            counts = pool_repository.status_counts(pool_id)
+            queued = counts["queued"]
+            running = counts["claimed"]
+            return {
+                "batch_id": pool.batch_key,
+                "status": "active" if queued + running else "completed",
+                "total": sum(counts.values()),
+                "queued": queued,
+                "running": running,
+                "completed": counts["completed"],
+                "failed": counts["failed"],
+            }
         if dependencies.evaluation_progress is None:
             return {
                 "status": "idle",
