@@ -190,3 +190,54 @@ def test_dashboard_material_tasks_reach_the_same_agent_session(
     assert claimed.state is AgentWorkStatus.CLAIMED
     assert claimed.work is not None
     assert claimed.work.kind is AgentWorkKind.APPLICATION_MATERIAL
+
+
+def test_failed_evaluation_does_not_leave_dashboard_progress_running(
+    tmp_path,
+) -> None:
+    now = datetime.now(UTC)
+    database = Database(str(tmp_path / "jobs.db"))
+    tasks_root = tmp_path / "workspace" / "ai-tasks"
+    _task(
+        tasks_root,
+        "evaluation-current",
+        capability="integrations/job-evaluation/capability.md",
+    )
+    progress = EvaluationProgressStore(tmp_path / "progress.json")
+    progress.start(["evaluation-current"], now=now)
+    batches = JobBatchRepository(database)
+    batch = batches.create("AI Lead", now=now)
+    batches.mark_scoring(batch.id)
+    dispatcher = RuntimeAgentWorkDispatcher(
+        database=database,
+        progress=progress,
+        workflow=Mock(),
+        materials=Mock(),
+    )
+    coordinator = AgentWorkCoordinator(
+        work=AgentWorkRepository(database),
+        sources=RuntimeAgentWorkSources(
+            progress=progress,
+            materials=MaterialRepository(database),
+        ),
+        dispatcher=dispatcher,
+        tasks_root=tasks_root,
+        sleeper=lambda _seconds: None,
+    )
+    session = coordinator.start(now=now)
+    claimed = coordinator.next(session.id, wait_seconds=0, now=now)
+    assert claimed.work is not None
+    assert progress.get().running == 1
+    assert progress.get().queued == 0
+
+    coordinator.fail(
+        session_id=session.id,
+        work_id=claimed.work.work_id,
+        error_message="schema validation failed",
+        now=now,
+    )
+
+    state = progress.get()
+    assert state.running == 0
+    assert state.failed == 1
+    assert batches.current().status == "scored"
