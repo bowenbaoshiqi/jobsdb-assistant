@@ -335,6 +335,26 @@ def agent_pool_status(
     })
 
 
+@agent_pool_app.command("heartbeat")
+def agent_pool_heartbeat(
+    session: str = typer.Option(..., "--session"),
+    pool: str = typer.Option(..., "--pool"),
+    live_slot: list[str] = typer.Option([], "--live-slot"),  # noqa: B008
+) -> None:
+    """续租当前仍由客户端存活的评分 Worker 槽位。"""
+    del session
+    count = _build_agent_work_coordinator().pool_heartbeat(
+        pool_id=pool,
+        live_slot_tokens=tuple(live_slot),
+        now=datetime.now(UTC),
+    )
+    _print_json({
+        "protocol_version": 1,
+        "pool": pool,
+        "renewed_slots": count,
+    })
+
+
 @agent_pool_app.command("stop")
 def agent_pool_stop(
     session: str = typer.Option(..., "--session"),
@@ -342,15 +362,15 @@ def agent_pool_stop(
 ) -> None:
     """停止评分池并释放未完成的职位评分。"""
     del session
-    released = _build_agent_work_coordinator().pool.stop_pool(
-        pool,
+    released = _build_agent_work_coordinator().pool_stop(
+        pool_id=pool,
         now=datetime.now(UTC),
     )
     _print_json({
         "protocol_version": 1,
         "pool": pool,
         "state": "stopped",
-        "released": len(released),
+        "released": released,
     })
 
 

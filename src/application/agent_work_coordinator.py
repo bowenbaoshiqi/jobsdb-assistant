@@ -231,6 +231,46 @@ class AgentWorkCoordinator:
             "terminal": open_count == 0,
         }
 
+    def pool_heartbeat(
+        self,
+        *,
+        pool_id: str,
+        live_slot_tokens: tuple[str, ...],
+        now: datetime,
+    ) -> int:
+        return self.pool.heartbeat(
+            pool_id,
+            live_slot_tokens=live_slot_tokens,
+            now=now,
+        )
+
+    def pool_recover_stale(
+        self,
+        *,
+        pool_id: str,
+        now: datetime,
+    ) -> tuple:
+        recovered = self.pool.release_stale(pool_id, now=now)
+        for item in recovered:
+            with suppress(KeyError):
+                self.dispatcher.mark_requeued(
+                    item.kind,
+                    item.internal_task_id,
+                    now=now,
+                )
+        return recovered
+
+    def pool_stop(self, *, pool_id: str, now: datetime) -> int:
+        released = self.pool.stop_pool(pool_id, now=now)
+        for item in released:
+            with suppress(KeyError):
+                self.dispatcher.mark_requeued(
+                    item.kind,
+                    item.internal_task_id,
+                    now=now,
+                )
+        return len(released)
+
     def prepare_profile(
         self,
         *,

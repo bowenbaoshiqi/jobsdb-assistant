@@ -21,6 +21,7 @@ from src.storage.database import Database
 
 
 _LEASE = timedelta(minutes=5)
+_STALE_AFTER = timedelta(seconds=90)
 
 
 class AgentPoolRepository:
@@ -253,6 +254,17 @@ class AgentPoolRepository:
         with self.database._connect() as conn:
             return self._pool_from_conn(conn, pool_id)
 
+    def active_pool_ids(self) -> tuple[str, ...]:
+        with self.database._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT id FROM agent_pools
+                WHERE status IN ('starting', 'active', 'draining')
+                ORDER BY created_at, id
+                """
+            ).fetchall()
+        return tuple(row["id"] for row in rows)
+
     def clear_slot_for_work(self, work_id: str, *, now: datetime) -> None:
         with self.database._connect() as conn:
             conn.execute(
@@ -263,6 +275,112 @@ class AgentPoolRepository:
                 """,
                 (now.isoformat(), work_id),
             )
+
+    def heartbeat(
+        self,
+        pool_id: str,
+        *,
+        live_slot_tokens: tuple[str, ...],
+        now: datetime,
+    ) -> int:
+        timestamp = now.isoformat()
+        with self.database._connect() as conn:
+            pool = conn.execute(
+                "SELECT status FROM agent_pools WHERE id = ?",
+                (pool_id,),
+            ).fetchone()
+            if pool is None:
+                raise KeyError(pool_id)
+            if not live_slot_tokens:
+                conn.execute(
+                    "UPDATE agent_pools SET heartbeat_at = ? WHERE id = ?",
+                    (timestamp, pool_id),
+                )
+                return 0
+            placeholders = ", ".join("?" for _ in live_slot_tokens)
+            params = (timestamp, pool_id, *live_slot_tokens)
+            updated = conn.execute(
+                f"""
+                UPDATE agent_pool_slots
+                SET heartbeat_at = ?
+                WHERE pool_id = ? AND slot_token IN ({placeholders})
+                  AND status IN ('idle', 'assigned')
+                """,
+                params,
+            )
+            conn.execute(
+                "UPDATE agent_pools SET heartbeat_at = ? WHERE id = ?",
+                (timestamp, pool_id),
+            )
+            conn.execute(
+                """
+                UPDATE agent_work_items
+                SET lease_expires_at = ?, updated_at = ?
+                WHERE id IN (
+                    SELECT current_work_id FROM agent_pool_slots
+                    WHERE pool_id = ? AND slot_token IN ({})
+                      AND current_work_id IS NOT NULL
+                ) AND status = 'claimed'
+                """.format(placeholders),
+                (
+                    (now + _LEASE).isoformat(),
+                    timestamp,
+                    pool_id,
+                    *live_slot_tokens,
+                ),
+            )
+            return updated.rowcount
+
+    def release_stale(
+        self,
+        pool_id: str,
+        *,
+        now: datetime,
+    ) -> tuple[RecoveredAgentWork, ...]:
+        cutoff = (now - _STALE_AFTER).isoformat()
+        with self.database._connect() as conn:
+            pool = conn.execute(
+                "SELECT * FROM agent_pools WHERE id = ?",
+                (pool_id,),
+            ).fetchone()
+            if pool is None:
+                raise KeyError(pool_id)
+            pool_stale = pool["heartbeat_at"] <= cutoff
+            rows = conn.execute(
+                """
+                SELECT work.* FROM agent_work_items AS work
+                JOIN agent_pool_slots AS slot ON slot.current_work_id = work.id
+                WHERE slot.pool_id = ? AND work.status = 'claimed'
+                  AND (? OR slot.heartbeat_at IS NULL OR slot.heartbeat_at <= ?)
+                """,
+                (pool_id, pool_stale, cutoff),
+            ).fetchall()
+            if not rows:
+                return ()
+            conn.execute(
+                """
+                UPDATE agent_work_items SET status = 'queued', session_id = NULL,
+                    lease_expires_at = NULL, updated_at = ?
+                WHERE id IN (
+                    SELECT current_work_id FROM agent_pool_slots
+                    WHERE pool_id = ? AND current_work_id IS NOT NULL
+                ) AND status = 'claimed'
+                """,
+                (now.isoformat(), pool_id),
+            )
+            conn.execute(
+                """
+                UPDATE agent_pool_slots
+                SET status = 'idle', current_work_id = NULL
+                WHERE pool_id = ? AND current_work_id IS NOT NULL
+                """,
+                (pool_id,),
+            )
+            conn.execute(
+                "UPDATE agent_pools SET status = 'stale' WHERE id = ?",
+                (pool_id,),
+            )
+        return tuple(self._recovered(row) for row in rows)
 
     def status_counts(self, pool_id: str) -> dict[str, int]:
         with self.database._connect() as conn:
