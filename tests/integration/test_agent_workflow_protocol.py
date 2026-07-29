@@ -147,3 +147,46 @@ def test_runtime_dispatch_marks_completed_batch_scored(tmp_path) -> None:
 
     assert progress.get().completed == 1
     assert batches.current().status == "scored"
+
+
+def test_dashboard_material_tasks_reach_the_same_agent_session(
+    tmp_path,
+) -> None:
+    now = datetime.now(UTC)
+    database = Database(str(tmp_path / "jobs.db"))
+    tasks_root = tmp_path / "workspace" / "ai-tasks"
+    _task(
+        tasks_root,
+        "material-current",
+        capability="integrations/candidate-profile/material.md",
+    )
+    materials = MaterialRepository(database)
+    materials.create_task(
+        task_id="material-current",
+        batch_id="materials-batch",
+        job_id="job-1",
+        snapshot_id=1,
+        profile_version=1,
+        evaluation_id="evaluation-1",
+        target_version=1,
+        payload={"task_id": "material-current"},
+        created_at=now,
+    )
+    progress = EvaluationProgressStore(tmp_path / "progress.json")
+    coordinator = AgentWorkCoordinator(
+        work=AgentWorkRepository(database),
+        sources=RuntimeAgentWorkSources(
+            progress=progress,
+            materials=materials,
+        ),
+        dispatcher=Mock(),
+        tasks_root=tasks_root,
+        sleeper=lambda _seconds: None,
+    )
+    session = coordinator.start(now=now)
+
+    claimed = coordinator.next(session.id, wait_seconds=0, now=now)
+
+    assert claimed.state is AgentWorkStatus.CLAIMED
+    assert claimed.work is not None
+    assert claimed.work.kind is AgentWorkKind.APPLICATION_MATERIAL
