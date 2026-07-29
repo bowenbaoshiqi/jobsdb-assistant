@@ -61,7 +61,7 @@ uv run jobsdb-assistant discover \
 > 使用 jobsdb-assistant 启动求职助手
 
 如果是首次使用，可在同一句话中提供简历绝对路径。Skill 会运行
-`agent doctor → agent start → agent next` 统一协议，并保持当前 Agent 会话。
+`agent doctor → agent start → agent listen` 统一协议，并保持当前 Agent 会话。
 之后可以在 Dashboard 归档并搜索下一批职位或创建材料任务，无需再次返回 Agent
 说“继续”。
 
@@ -86,8 +86,12 @@ Python CLI 是 Skill 使用的稳定协议，所有内部 ID 都由 Python 保�
 ```bash
 uv run jobsdb-assistant agent doctor
 uv run jobsdb-assistant agent start --source /absolute/path/resume.pdf
-uv run jobsdb-assistant agent next --session SESSION --wait 30
+uv run jobsdb-assistant agent listen --session SESSION
 ```
+
+`agent listen` 在 Dashboard 暂时没有任务时不会返回；新评分或材料任务到达后才把
+唯一工作交给当前 Agent。`agent next --session SESSION --wait 0` 只保留为一次性
+诊断命令，不用于正常持续运行。
 
 包含简历、画像、JD 和 AI 结果的检查点保存在忽略的
 `workspace/ai-tasks/`。评分阶段不会生成申请材料或执行投递；材料只在用户
