@@ -40,6 +40,8 @@ workflow_app = typer.Typer(help="候选人画像与职位评分工作流")
 app.add_typer(workflow_app, name="workflow")
 dashboard_app = typer.Typer(help="本地职位审核 Dashboard")
 app.add_typer(dashboard_app, name="dashboard")
+agent_app = typer.Typer(help="统一 Agent 工作协议")
+app.add_typer(agent_app, name="agent")
 
 console = Console()
 
@@ -56,8 +58,98 @@ def _build_material_generation_service():
     return build_material_generation_service()
 
 
+def _build_agent_work_coordinator():
+    from src.application.agent_runtime import build_agent_work_coordinator
+
+    return build_agent_work_coordinator()
+
+
 def _print_json(payload: dict) -> None:
     typer.echo(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+
+
+@agent_app.command("start")
+def agent_start(
+    port: int = typer.Option(8765, "--port", min=1, max=65535),
+) -> None:
+    """启动或恢复一个仅暴露不透明工作 ID 的 Agent 会话。"""
+    session = _build_agent_work_coordinator().start(now=datetime.now(UTC))
+    _print_json({
+        "protocol_version": 1,
+        "state": "active",
+        "session": session.id,
+        "dashboard_url": f"http://127.0.0.1:{port}",
+    })
+
+
+@agent_app.command("next")
+def agent_next(
+    session: str = typer.Option(..., "--session"),
+    wait: int = typer.Option(30, "--wait", min=0, max=30),
+) -> None:
+    """等待并领取唯一的下一项 Agent 工作。"""
+    result = _build_agent_work_coordinator().next(
+        session,
+        wait_seconds=wait,
+    )
+    _print_json(result.model_dump(mode="json"))
+
+
+@agent_app.command("submit")
+def agent_submit(
+    session: str = typer.Option(..., "--session"),
+    work_id: str = typer.Option(..., "--work-id"),
+    result: Path = typer.Option(..., "--result"),  # noqa: B008
+) -> None:
+    """按不透明 work_id 校验并提交 Agent 结果。"""
+    record = _build_agent_work_coordinator().submit(
+        session_id=session,
+        work_id=work_id,
+        result_path=result,
+        now=datetime.now(UTC),
+    )
+    _print_json({
+        "protocol_version": 1,
+        "state": record.status.value,
+        "work_id": record.id,
+        "result_hash": record.result_hash,
+    })
+
+
+@agent_app.command("fail")
+def agent_fail(
+    session: str = typer.Option(..., "--session"),
+    work_id: str = typer.Option(..., "--work-id"),
+    error: Path = typer.Option(..., "--error"),  # noqa: B008
+) -> None:
+    """记录一项隔离失败并允许队列继续。"""
+    record = _build_agent_work_coordinator().fail(
+        session_id=session,
+        work_id=work_id,
+        error_message=error.read_text(encoding="utf-8"),
+        now=datetime.now(UTC),
+    )
+    _print_json({
+        "protocol_version": 1,
+        "state": record.status.value,
+        "work_id": record.id,
+    })
+
+
+@agent_app.command("stop")
+def agent_stop(
+    session: str = typer.Option(..., "--session"),
+) -> None:
+    """停止 Agent 会话并释放未完成的工作租约。"""
+    record = _build_agent_work_coordinator().stop(
+        session,
+        now=datetime.now(UTC),
+    )
+    _print_json({
+        "protocol_version": 1,
+        "state": record.status.value,
+        "session": record.id,
+    })
 
 
 def _onboarding_payload(outcome) -> dict:
