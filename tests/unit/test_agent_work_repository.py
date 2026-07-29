@@ -120,6 +120,40 @@ def test_expired_claim_is_recovered_once(tmp_path) -> None:
     assert claimed.session_id == second_session.id
 
 
+def test_recover_expired_returns_recovered_work_identity(tmp_path) -> None:
+    now = datetime.now(UTC)
+    repository = AgentWorkRepository(Database(str(tmp_path / "jobs.db")))
+    session = repository.start_session(now=now)
+    work = _enqueue(repository, now=now)
+    repository.claim_next(
+        session.id,
+        now=now,
+        lease_duration=timedelta(seconds=1),
+    )
+
+    recovered = repository.recover_expired(now=now + timedelta(seconds=2))
+
+    assert [item.work_id for item in recovered] == [work.id]
+    assert recovered[0].kind is AgentWorkKind.JOB_EVALUATION
+    assert recovered[0].internal_task_id == "private-task-id"
+    assert recovered[0].recovery_reason == "lease_expired"
+    assert repository.get(work.id).status is AgentWorkStatus.QUEUED
+
+
+def test_release_session_returns_owned_work_identities(tmp_path) -> None:
+    now = datetime.now(UTC)
+    repository = AgentWorkRepository(Database(str(tmp_path / "jobs.db")))
+    session = repository.start_session(now=now)
+    work = _enqueue(repository, now=now)
+    repository.claim_next(session.id, now=now)
+
+    released = repository.release_session(session.id, now=now)
+
+    assert [item.work_id for item in released] == [work.id]
+    assert released[0].recovery_reason == "session_stopped"
+    assert repository.get(work.id).status is AgentWorkStatus.QUEUED
+
+
 def test_active_claim_is_returned_to_its_owner(tmp_path) -> None:
     now = datetime.now(UTC)
     repository = AgentWorkRepository(Database(str(tmp_path / "jobs.db")))
