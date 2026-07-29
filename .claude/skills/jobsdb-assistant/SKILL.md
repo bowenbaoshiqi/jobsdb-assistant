@@ -76,6 +76,38 @@ state by editing the Dashboard progress file or by reading SQLite. If the
 client turn disappears, the next `agent start`, `listen`, or `next` performs
 lease recovery.
 
+## Three-worker evaluation pool
+
+When the current batch contains `job_evaluation` work, use the pool protocol;
+do not claim those jobs through the single-worker listener:
+
+```bash
+uv run jobsdb-assistant agent pool start --session SESSION
+uv run jobsdb-assistant agent pool ready --session SESSION --pool POOL \
+  --slot SLOT --capability-context CAPABILITY_CONTEXT \
+  --profile-context PROFILE_CONTEXT
+uv run jobsdb-assistant agent pool claim --session SESSION --pool POOL --slot SLOT
+uv run jobsdb-assistant agent pool heartbeat --session SESSION --pool POOL \
+  --live-slot SLOT
+uv run jobsdb-assistant agent pool status --session SESSION --pool POOL
+```
+
+The pool must report `requested_concurrency=3` and exactly three returned slot
+tokens. Create exactly three top-level workers—one per returned slot—then load
+only the declared pinned capability and profile context before calling
+`agent pool ready` for all three. Do not claim any work until all slots are
+ready. Each worker handles one JD at a time and is reused for at most five JDs;
+after five, or after a context hash mismatch, replace that worker in the same
+slot. The main Agent validates each result and performs `agent submit`; workers
+never submit directly.
+
+Heartbeat live slots every 30 seconds. If a worker fails, stop heartbeating its
+slot and let Python requeue it after 90 seconds; replace the worker and retry once.
+Keep the other slots running. Never create nested workers, guess IDs,
+read SQLite, scan task directories, combine multiple JDs, or end while a pool
+or claimed work is active. Use `agent pool status` before reporting terminal
+completion, and call `agent pool stop` only on explicit user request.
+
 ## AI constraints
 
 - Candidate profile: use only supplied evidence and explicit answers; never
