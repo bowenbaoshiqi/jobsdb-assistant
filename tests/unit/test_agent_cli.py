@@ -200,3 +200,27 @@ def test_dashboard_health_accepts_the_existing_account_payload(
     )
 
     assert _dashboard_healthy("http://127.0.0.1:8877") is True
+
+
+def test_dashboard_health_accepts_the_current_status_payload(
+    monkeypatch,
+) -> None:
+    response = Mock(status=200)
+    response.__enter__ = Mock(return_value=response)
+    response.__exit__ = Mock(return_value=None)
+    monkeypatch.setattr(
+        "src.agent.dashboard.urllib.request.urlopen",
+        Mock(return_value=response),
+    )
+    monkeypatch.setattr(
+        "src.agent.dashboard.json.load",
+        Mock(
+            return_value={
+                "status": "ok",
+                "database": "ready",
+                "dashboard_version": "0.6.0",
+            }
+        ),
+    )
+
+    assert _dashboard_healthy("http://127.0.0.1:8877") is True
