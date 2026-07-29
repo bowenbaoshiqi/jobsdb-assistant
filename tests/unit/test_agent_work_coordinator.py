@@ -41,6 +41,7 @@ def _write_task(
     task_id: str,
     *,
     capabilities: tuple[str, ...] = ("integrations/capability.md",),
+    integration_id: str | None = None,
 ) -> None:
     directory = root / task_id
     directory.mkdir(parents=True)
@@ -49,6 +50,7 @@ def _write_task(
             {
                 "task_id": task_id,
                 "capability_paths": capabilities,
+                "integration_id": integration_id,
             }
         ),
         encoding="utf-8",
@@ -124,6 +126,38 @@ def test_next_returns_an_opaque_envelope(tmp_path) -> None:
     assert "evaluation-current" not in result.work.work_id
     assert result.work.task_path == (
         tasks_root / "evaluation-current" / "task.json"
+    )
+
+
+def test_next_returns_absolute_pinned_capability_paths(tmp_path) -> None:
+    tasks_root = tmp_path / "workspace" / "ai-tasks"
+    _write_task(
+        tasks_root,
+        "evaluation-current",
+        capabilities=("modes/oferta.md",),
+        integration_id="job-evaluation",
+    )
+    coordinator = _coordinator(
+        tmp_path,
+        sources=FakeSources(evaluations=("evaluation-current",)),
+    )
+    session = coordinator.start(now=datetime.now(UTC))
+
+    result = coordinator.next(
+        session.id,
+        wait_seconds=0,
+        now=datetime.now(UTC),
+    )
+
+    assert result.work is not None
+    assert result.work.capability_paths == (
+        (
+            tmp_path
+            / "integrations"
+            / "job-evaluation"
+            / "modes"
+            / "oferta.md"
+        ).resolve(),
     )
 
 
