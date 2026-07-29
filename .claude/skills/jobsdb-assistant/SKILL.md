@@ -1,85 +1,86 @@
 ---
 name: jobsdb-assistant
-description: Run the local JobsDB Hong Kong candidate-profile and native career-ops evaluation workflow from Claude Code. Use for first-time candidate onboarding, explicit profile updates, single-keyword JobsDB discovery, incremental A-F scoring, and the local evaluation report.
+description: Start and continuously run the complete local JobsDB Hong Kong workflow from Claude Code. Use for candidate onboarding, Dashboard job discovery, Career Ops scoring and full Simplified Chinese JD translation, tailored materials, or recovery. Keep the Agent session active until the user explicitly stops it.
 ---
 
-# JobsDB Assistant
+# Run JobsDB Assistant
 
-Follow the canonical workflow in
-`.agents/skills/jobsdb-assistant/SKILL.md` exactly.
+Python and SQLite own all state and IDs. Use only the unified Agent protocol.
+Treat every returned `session` and `work_id` as opaque; copy it exactly and
+never derive or search for an internal task, job, snapshot, batch, proposal,
+or material ID.
 
-Python and SQLite are the state authority. Use these commands in order as
-directed by Python:
+## Start
 
-```text
-workflow profile-prepare
-workflow profile-submit
-workflow profile-answers
-workflow profile-confirm
-discover --keyword
-workflow evaluation-prepare
-workflow evaluation-next
-workflow evaluation-submit
-workflow report
-workflow material-pending
-workflow material-submit
-workflow material-progress
-dashboard doctor
-dashboard start
+From the repository root run:
+
+```bash
+uv run jobsdb-assistant agent doctor
+uv run jobsdb-assistant agent start
 ```
 
-Read each task from `workspace/ai-tasks/<task_id>/task.json`, then read only
-the pinned integration files listed in `capability_paths`. Keep the current
-Claude Code session active until the report or an explicit Python error.
+Repeat `--source ABSOLUTE_PATH` for user-supplied resume/profile files. Use
+`--update-profile` only on an explicit update request. Do not read source code,
+scan `workspace/ai-tasks`, or query SQLite to decide what comes next.
 
-For candidate onboarding, follow the canonical typed interview gate. A task
-with `interview_complete: false` must return all required question dimensions
-and cannot return a proposal. Collect dimension-keyed structured answers,
-including explicit skip statuses when chosen by the user, then service the
-follow-up task. A completed proposal includes evidence-backed `canonical_cv`
-and one answer-hash-bound synthesis per dimension; Python injects and
-preserves the raw answers.
+The command returns the exact session and Dashboard URL. Report the URL and
+enter the loop. Dashboard archive/search and material actions feed this same
+session automatically.
 
-For evaluation, read exactly the task's `profile_context_paths` and use the
-native loading order
-`config/profile.yml → modes/_shared.md → modes/_profile.md → modes/oferta.md → cv.md`.
-Never recreate or edit the immutable private profile bundle.
-Every evaluation result must include `jd_translation_zh_cn`, a faithful full
-简体中文 JD 翻译 of every captured section. Do not summarize, omit company
-information, responsibilities, requirements, salary, benefits, or employment
-terms, and do not invent missing information.
+## Loop
 
-While the Dashboard is running, continuously poll `/api/job-batch`. When it
-reports `scoring`, run `workflow evaluation-next`, service the returned
-`task_path`, and submit it with `workflow evaluation-submit`. Repeat until
-`evaluation-next` returns `drained` and the batch reports `scored`. Do not
-wait for another user message between discovery and evaluation.
-While any current task is queued or running, the Agent MUST NOT send a final
-response or treat a claimed task as completed work; keep the same Agent turn
-active until the queue is drained or the batch fails.
+```bash
+uv run jobsdb-assistant agent next --session SESSION --wait 30
+```
 
-JobsDB discovery is public browser navigation and never uses credentials or
-login. Do not request password configuration during discovery.
+- `claimed`: read only the returned `task_path` and `capability_paths`. Write
+  schema-valid JSON to the exact `result_path`, then run:
 
-Do not modify integration checkouts, update fork revisions, or combine scoring
-systems. Keep `dashboard start` in the
-foreground. Application execution is allowed only after the user's Dashboard confirmation:
-Quick Apply uses the JobsDB default CV with no cover letter, while Apply
-remains manual. The Agent must not call the application endpoint or confirm it
-on the user's behalf.
+  ```bash
+  uv run jobsdb-assistant agent submit \
+    --session SESSION --work-id WORK_ID --result RESULT_PATH
+  ```
 
-For a Dashboard-created material batch, follow section 6 of the canonical
-skill. Process every `waiting_for_agent` task, submit each structured result
-through Python, continue other material tasks after an isolated failure, and
-use `workflow material-progress` after each result. Reviewer and ATS advice
-does not block the user's decision; factual claims must stay within the
-confirmed profile. Copy the task's `material_mode` into every result. For
-`cover_letter_only`, generate only the 100–300-word cover letter and omit
-`tailored_sections`. For `tailored_resume_and_cover_letter`, generate
-`Professional Summary`, exactly four `Career Highlights`, exactly three
-`Core Competencies`, and the cover letter; Python renders the fixed-template
-PDF.
+- `human_required`: read `prompt_path`, request only the declared human input,
+  write it to `response_path`, submit it with the exact same opaque `work_id`,
+  and continue. Silence is never approval.
+- `idle`: idle is not completion. Call `agent next` again and provide a short
+  heartbeat at least once per minute.
+- recoverable error: write a sanitized error file, call
+  `agent fail --session SESSION --work-id WORK_ID --error ERROR_PATH`, and
+  continue other work.
+- `failed`: report the blocker and exact required action.
+- `stopped`: report durable results and end.
 
-v0.6 application execution follows section 7 of the canonical skill. Keep the
-Claude Code session active with the Dashboard, but must not confirm submission
-or invoke prepare/confirm endpoints for the user.
+Do not send a final answer while the user expects the assistant to remain
+active. On an explicit stop request run:
+
+```bash
+uv run jobsdb-assistant agent stop --session SESSION
+```
+
+## AI constraints
+
+- Candidate profile: use only supplied evidence and explicit answers; never
+  invent or infer skipped preferences.
+- Evaluation: use native Career Ops ordered A-F evaluation and 1.0–5.0 score.
+  Include a faithful full Simplified Chinese translation of every JD section;
+  never replace it with a summary.
+- Cover-only material: factual 100–300-word English cover letter, no tailored
+  resume.
+- Full material: change only `Professional Summary`, exactly four
+  `Career Highlights`, and exactly three `Core Competencies`; add a factual
+  100–300-word English cover letter. Never change Work Experience or later
+  sections.
+- Do not edit pinned integration checkouts or combine scoring engines.
+
+## Required human gates
+
+Candidate interview and profile confirmation, material review, Quick Apply
+Review/final submission, JobsDB login or 验证码, uncertain submission results,
+and external-site Apply all require the user. Keep listening for independent
+work while a gate is open. Never approve, prepare, or submit an application
+for the user.
+
+Keep all private documents, tasks, JDs, materials, cookies, logs, and browser
+profiles in ignored local paths. Never commit or echo complete private data.

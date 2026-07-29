@@ -36,31 +36,29 @@ def test_canonical_skill_starts_dashboard_without_auto_clicking() -> None:
         ".agents/skills/jobsdb-assistant/SKILL.md"
     ).read_text(encoding="utf-8")
 
-    assert "dashboard doctor" in instructions
-    assert "dashboard start" in instructions
-    assert "Keep the foreground Agent session active" in instructions
-    assert "must not click or call the Quick Apply endpoint" in instructions
-    assert "JobsDB default CV" in instructions
-    assert "no cover letter" in instructions
+    assert "agent doctor" in instructions
+    assert "agent start" in instructions
+    assert "idle is not completion" in instructions
+    assert "Never call a Quick Apply" in instructions
     assert "Professional Summary" in instructions
     assert "Career Highlights" in instructions
     assert "Core Competencies" in instructions
-    assert "material_mode" in instructions
-    assert "cover_letter_only" in instructions
-    assert "tailored_resume_and_cover_letter" in instructions
-    assert "`material_mode` into the result unchanged" in instructions
-    assert "keeps the JobsDB default resume" in instructions
-    assert "must not confirm submission" in instructions
+    assert "Cover-letter-only" in instructions
+    assert "Full material" in instructions
+    assert "Never modify Work Experience" in instructions
+    assert "final submission confirmation" in instructions
 
 
-def test_claude_skill_delegates_dashboard_rules() -> None:
+def test_claude_skill_uses_the_same_agent_protocol() -> None:
     instructions = Path(
         ".claude/skills/jobsdb-assistant/SKILL.md"
     ).read_text(encoding="utf-8")
 
-    assert "dashboard doctor" in instructions
-    assert "dashboard start" in instructions
-    assert "Dashboard confirmation" in instructions
+    assert "agent doctor" in instructions
+    assert "agent start" in instructions
+    assert "agent next" in instructions
+    assert "human_required" in instructions
+    assert "final submission" in instructions
 
 
 def test_dashboard_labels_only_persisted_jd_translations() -> None:

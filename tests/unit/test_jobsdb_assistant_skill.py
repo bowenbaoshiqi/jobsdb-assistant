@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 SKILLS = (
     Path(".agents/skills/jobsdb-assistant/SKILL.md"),
     Path(".claude/skills/jobsdb-assistant/SKILL.md"),
