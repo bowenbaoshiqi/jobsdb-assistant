@@ -152,3 +152,36 @@ def test_stop_pool_releases_claimed_work(tmp_path) -> None:
 
     assert [item.work_id for item in released] == [claimed.id]
     assert work.get(claimed.id).status is AgentWorkStatus.QUEUED
+
+
+def test_heartbeat_renews_live_slots_and_stale_recovery_requeues_claim(
+    tmp_path,
+) -> None:
+    database, pools, work = _repository(tmp_path)
+    session = AgentWorkRepository(database).start_session(now=NOW)
+    pool = pools.start_pool(
+        session_id=session.id,
+        batch_key="batch-1",
+        assignments=_assignments(work, 3),
+        capability_context_id="cap-v1",
+        profile_context_id="profile-v1",
+        now=NOW,
+    )
+    _ready_all(pools, pool)
+    claimed = pools.claim_for_slot(pool.id, pool.slots[0].slot_token, now=NOW)
+    assert claimed is not None
+
+    renewed = pools.heartbeat(
+        pool.id,
+        live_slot_tokens=(pool.slots[0].slot_token,),
+        now=NOW + timedelta(seconds=30),
+    )
+    assert renewed == 1
+
+    recovered = pools.release_stale(
+        pool.id,
+        now=NOW + timedelta(seconds=121),
+    )
+
+    assert [item.work_id for item in recovered] == [claimed.id]
+    assert work.get(claimed.id).status is AgentWorkStatus.QUEUED
