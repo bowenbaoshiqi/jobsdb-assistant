@@ -25,6 +25,11 @@ def test_agent_start_prints_session_without_internal_ids(
         "src.main._build_agent_work_coordinator",
         lambda: coordinator,
     )
+    ensure_dashboard = Mock()
+    monkeypatch.setattr(
+        "src.main._ensure_agent_dashboard",
+        ensure_dashboard,
+    )
 
     result = runner.invoke(
         app,
@@ -52,6 +57,7 @@ def test_agent_start_prints_session_without_internal_ids(
         coordinator.prepare_profile.call_args.kwargs["source_documents"]
         == (str(resume),)
     )
+    ensure_dashboard.assert_called_once_with(port=8877)
 
 
 def test_agent_next_prints_one_machine_readable_result(monkeypatch) -> None:
