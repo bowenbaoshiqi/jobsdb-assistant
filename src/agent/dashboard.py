@@ -20,7 +20,10 @@ def _dashboard_healthy(url: str) -> bool:
             payload = json.load(response)
         return (
             response.status == 200
-            and isinstance(payload.get("account_alias"), str)
+            and (
+                payload.get("status") == "ok"
+                or isinstance(payload.get("account_alias"), str)
+            )
         )
     except (OSError, ValueError, urllib.error.URLError):
         return False
