@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from src.storage.database import Database
 from src.storage.migrations import Migration, MigrationRunner
 
 
@@ -49,3 +50,24 @@ def test_runner_rejects_duplicate_versions(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="duplicate migration version: 1"):
         MigrationRunner(str(tmp_path / "jobsdb.db")).apply([migration, migration])
+
+
+def test_database_applies_agent_work_migration(tmp_path: Path) -> None:
+    database = Database(str(tmp_path / "jobsdb.db"))
+
+    with database._connect() as conn:
+        version = conn.execute(
+            "SELECT name FROM schema_migrations WHERE version = 8"
+        ).fetchone()
+        tables = {
+            row["name"]
+            for row in conn.execute(
+                """
+                SELECT name FROM sqlite_master
+                WHERE type = 'table' AND name LIKE 'agent_%'
+                """
+            ).fetchall()
+        }
+
+    assert version["name"] == "v0.8 agent work protocol"
+    assert tables == {"agent_sessions", "agent_work_items"}
