@@ -4,6 +4,7 @@ from unittest.mock import Mock
 
 from typer.testing import CliRunner
 
+from src.agent.dashboard import _dashboard_healthy
 from src.domain.agent_work import AgentNextResult, AgentWorkStatus
 from src.main import app
 
@@ -159,3 +160,21 @@ def test_agent_next_rejects_wait_above_protocol_limit() -> None:
     )
 
     assert result.exit_code != 0
+
+
+def test_dashboard_health_accepts_the_existing_account_payload(
+    monkeypatch,
+) -> None:
+    response = Mock(status=200)
+    response.__enter__ = Mock(return_value=response)
+    response.__exit__ = Mock(return_value=None)
+    monkeypatch.setattr(
+        "src.agent.dashboard.urllib.request.urlopen",
+        Mock(return_value=response),
+    )
+    monkeypatch.setattr(
+        "src.agent.dashboard.json.load",
+        Mock(return_value={"account_alias": "default"}),
+    )
+
+    assert _dashboard_healthy("http://127.0.0.1:8877") is True
