@@ -24,7 +24,7 @@ def test_manifest_locks_approved_forks_and_required_capabilities() -> None:
     assert evaluation.commit == "01bf8b469ad5177a9c30230bc00509ead8e006c2"
     assert (
         evaluation.contract_version
-        == "career-ops-native-profile-bundle.v2"
+        == "career-ops-native-profile-bundle.v3"
     )
     assert (
         ".agents/skills/career-ops/SKILL.md" in evaluation.required_paths

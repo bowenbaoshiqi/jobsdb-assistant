@@ -63,6 +63,14 @@ def test_claude_skill_delegates_dashboard_rules() -> None:
     assert "Dashboard confirmation" in instructions
 
 
+def test_dashboard_labels_only_persisted_jd_translations() -> None:
+    script = Path(
+        "src/dashboard/static/dashboard.js"
+    ).read_text(encoding="utf-8")
+
+    assert "job.jd_translation_available" in script
+
+
 def test_ci_never_uploads_private_material_artifacts() -> None:
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
 

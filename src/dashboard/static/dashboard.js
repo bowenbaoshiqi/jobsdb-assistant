@@ -143,7 +143,7 @@ function renderTrace(job) {
   jd.className = "jd";
   jd.append(text(
     "h3",
-    job.evaluation_status === "evaluated"
+    job.jd_translation_available
       ? "职位描述（简体中文翻译）"
       : "当前职位描述",
   ));
