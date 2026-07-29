@@ -70,8 +70,30 @@ def _ensure_agent_dashboard(*, port: int) -> str:
     return ensure_agent_dashboard(port=port)
 
 
+def _run_agent_doctor(port: int) -> tuple[dict[str, str], ...]:
+    from src.agent.doctor import run_agent_doctor
+
+    return run_agent_doctor(port)
+
+
 def _print_json(payload: dict) -> None:
     typer.echo(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+
+
+@agent_app.command("doctor")
+def agent_doctor(
+    port: int = typer.Option(8765, "--port", min=1, max=65535),
+) -> None:
+    """检查统一协议、新环境、锁定集成和本地 Dashboard。"""
+    checks = _run_agent_doctor(port)
+    failed = any(item["status"] == "fail" for item in checks)
+    _print_json({
+        "protocol_version": 1,
+        "status": "failed" if failed else "ready",
+        "checks": checks,
+    })
+    if failed:
+        raise typer.Exit(code=1)
 
 
 @agent_app.command("start")
