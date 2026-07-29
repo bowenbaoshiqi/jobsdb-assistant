@@ -87,6 +87,20 @@ class EvaluationProgressStore:
                 return task_id
         return None
 
+    def pending_task_ids(self) -> tuple[str, ...]:
+        """Return current queued/running task IDs in durable batch order."""
+        batch = self._read()
+        if batch is None:
+            return ()
+        return tuple(
+            task_id
+            for task_id, status in batch.tasks.items()
+            if status in {
+                EvaluationTaskStatus.QUEUED,
+                EvaluationTaskStatus.RUNNING,
+            }
+        )
+
     def get(self) -> EvaluationProgress:
         batch = self._read()
         if batch is None:
