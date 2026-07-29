@@ -60,6 +60,7 @@ def evaluation(item: CurrentSnapshotRecord) -> JobEvaluation:
         ],
         recommendation="strong_apply",
         evidence=["JD: evidence"],
+        jd_translation_zh_cn=f"合成职位描述 {item.snapshot_id}",
         created_at=NOW,
     )
 
