@@ -108,6 +108,8 @@ class JobEvaluationAdapter:
             raise ValueError("evaluation snapshots do not match task")
         for evaluation in result.evaluations:
             snapshot = expected[evaluation.job_snapshot_id]
+            if evaluation.jd_summary_zh_cn is None:
+                raise ValueError("Chinese JD summary is required")
             if evaluation.snapshot_hash != snapshot.content_hash:
                 raise ValueError("snapshot hash mismatch")
             if evaluation.profile_version != task.profile_version:

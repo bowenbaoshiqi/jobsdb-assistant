@@ -44,6 +44,9 @@ For evaluation, read exactly the task's `profile_context_paths` and use the
 native loading order
 `config/profile.yml → modes/_shared.md → modes/_profile.md → modes/oferta.md → cv.md`.
 Never recreate or edit the immutable private profile bundle.
+Every evaluation result must include `jd_summary_zh_cn`, a 简体中文 JD 摘要
+covering the role purpose, responsibilities, requirements, and any stated
+salary or employment terms without inventing missing information.
 
 While the Dashboard is running, continuously poll `/api/job-batch`. When it
 reports `scoring`, run `workflow evaluation-next`, service the returned
