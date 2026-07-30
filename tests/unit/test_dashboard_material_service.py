@@ -115,6 +115,42 @@ def test_selected_batch_passes_requested_material_mode() -> None:
     assert captured["material_mode"] is MaterialMode.COVER_LETTER_ONLY
 
 
+def test_selected_batch_ignores_selections_from_archived_batches() -> None:
+    captured = {}
+
+    class Generation(FakeGeneration):
+        def plan_batch(self, **kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(batch_id=kwargs["batch_id"], pending=())
+
+    database = SimpleNamespace(
+        get_current_job_snapshot_record=lambda job_id: SimpleNamespace(
+            job_id=job_id
+        )
+    )
+    service = DashboardMaterialService(
+        database=database,
+        repository=FakeRepository(),
+        generation=Generation(),
+        materials_root=Path("workspace/materials"),
+        job_batch_repository=SimpleNamespace(
+            current_job_ids=lambda: ["job-current"]
+        ),
+        now=lambda: NOW,
+    )
+    service.selections = SimpleNamespace(
+        list_selected=lambda: {"job-current": NOW, "job-archived": NOW}
+    )
+    service.profiles = SimpleNamespace(
+        get_active=lambda: SimpleNamespace(version=1)
+    )
+    service.evaluations = SimpleNamespace(list_current=lambda version: [])
+
+    service.create_batch(MaterialMode.COVER_LETTER_ONLY)
+
+    assert [item.job_id for item in captured["snapshots"]] == ["job-current"]
+
+
 def test_review_actions_are_explicit_and_regeneration_keeps_feedback() -> None:
     package = SimpleNamespace(
         id="package-1",
