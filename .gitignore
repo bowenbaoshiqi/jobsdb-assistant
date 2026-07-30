@@ -44,6 +44,9 @@ workspace/
 *.jpg
 *.jpeg
 
+# 经隐私检查并明确批准公开的 README 产品图
+!docs/images/jobsdb-assistant-dashboard.png
+
 # 调试产物（防止误写到项目根目录;data/ 内的已被 data/ 覆盖）
 debug_*.html
 debug_*.png

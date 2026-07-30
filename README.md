@@ -53,7 +53,15 @@ Claude Code / Codex
                                           └── Quick Apply
 ```
 
-### 2.1 CC/Codex Skill
+### 2.1 真实产品界面
+
+![JobsDB Assistant 本地职位审核 Dashboard，展示职位批次、评分进度、筛选和材料生成入口](docs/images/jobsdb-assistant-dashboard.png)
+
+上图来自真实本地运行环境：当前批次包含 15 个职位，Dashboard 展示完整评分进度、
+职位筛选、Career Ops A–F 结果，以及“仅定制求职信”和“定制简历 + 求职信”
+两个独立材料入口。
+
+### 2.2 CC/Codex Skill
 
 仓库为两种 Agent 客户端提供语义一致的 Skill：
 
@@ -67,7 +75,7 @@ Skill 只调用稳定的 Python Agent 协议，并复制 Python 返回的 `sessi
 评分默认使用一个持续运行的 Agent 串行处理当前 15 个职位。仓库保留固定三槽
 Pool 作为显式并行实验入口，但它目前不是日常默认流程。
 
-### 2.2 Python 主流程
+### 2.3 Python 主流程
 
 Python 是工作流的权威控制层，负责：
 
@@ -82,7 +90,7 @@ Python 是工作流的权威控制层，负责：
 即使 CC/Codex 关闭，已经完成的步骤也会保留。再次启动 Skill 后，Python 会从
 本地状态继续未完成任务，而不是依赖 Agent 回忆此前对话。
 
-### 2.3 能力 Adapter
+### 2.4 能力 Adapter
 
 主项目固定并只读消费两个 public fork：
 
@@ -96,7 +104,7 @@ Adapter 把候选人简历和访谈结果映射为 Career Ops 能直接消费的
 `config/profile.yml` 和 `modes/_profile.md`。上游 fork 的代码不由本项目修改，
 升级时必须显式更新 manifest 中的固定提交。
 
-### 2.4 JobsDB 浏览器引擎
+### 2.5 JobsDB 浏览器引擎
 
 JobsDB 自动化引擎基于 Python、Playwright 和持久化浏览器 Profile：
 
