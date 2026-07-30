@@ -1,25 +1,243 @@
 # JobsDB Assistant
 
-当前开发版本：`v0.8.0`。新产品基于上游 JobsDB 自动投递引擎 v2.0
-构建；历史 `v2.0-phase*` 标签仅代表上游引擎的重构阶段。
+当前版本：`v0.8.0`
 
-`v0.8.0` 在职位选择、定制材料审核和申请执行闭环之上增加统一 Agent 工作
-协议。用户启动一次 CC/Codex Skill 后，可以主要留在 Dashboard 完成搜索、
-归档、选择和审核；画像、评分、完整简体中文 JD 翻译及材料生成会由同一 Agent
-会话持续处理。
+JobsDB Assistant 是面向香港 JobsDB 的本地求职工作台。它把职位抓取、候选人
+画像、Career Ops 职位评分、简体中文 JD 翻译、定制简历与求职信、材料审核，
+以及 Quick Apply 执行串成一个可恢复的流程。
 
-用户可以为每个
-职位只生成英文求职信并保留 JobsDB 默认简历，也可以生成独立英文简历和求职信。
-定制简历只替换固定 v5 模板的 `Professional Summary`、四条
-`Career Highlights` 和三项 `Core Competencies`，工作经历及后续内容保持
-不变。Quick Apply 必须由用户先准备、再确认提交；Apply 只做人工材料交接。
+产品默认由 Claude Code（CC）或 Codex 中的 `jobsdb-assistant` Skill 启动。
+Python 和 SQLite 负责流程、状态、任务标识及人工门禁；Agent 只处理需要 AI
+推理的工作。候选人资料、JD、材料、浏览器登录态和运行记录全部保存在本机。
 
-所有候选人资料、JD、定制简历、求职信、cookies、浏览器 profile、SQLite、
-日志和截图只保存在本地忽略目录，CI 不上传任何运行时 artifact。
+---
 
-## 🚀 快速开始
+# 第一部分：产品架构
 
-### 1. 安装
+## 1. 设计目标
+
+JobsDB Assistant 的核心原则是：
+
+- **一个主流程**：用户从 CC/Codex 启动一次，之后主要在本地 Dashboard 操作。
+- **Python 管状态，Agent 做推理**：任务顺序、重试、缓存、审批和投递状态不依赖
+  Agent 的上下文记忆。
+- **复用而不修改上游项目**：通过 Adapter 消费固定版本的 public fork。
+- **默认人工确认**：画像、材料和最终提交都不能由系统替用户批准。
+- **本地优先和公开仓库安全**：私有运行数据不进入 Git，也不上传 CI artifact。
+
+## 2. 总体架构
+
+```text
+Claude Code / Codex
+└── jobsdb-assistant Skill
+    ├── 启动或恢复 Agent 会话
+    ├── 完成画像、评分和材料等 AI 任务
+    └── 遵守 Python 返回的不透明任务协议
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  JobsDB Assistant Python 主流程              │
+│                                                             │
+│  Job Batch ─ Candidate Profile ─ Evaluation ─ Materials     │
+│      │              │              │             │           │
+│      └──────────────┴──────────────┴─────────────┘           │
+│                   SQLite / Checkpoints                       │
+│                                                             │
+│  Dashboard API ─ Human Gates ─ Application Execution         │
+└───────────────┬───────────────────────────────┬───────────────┘
+                │                               │
+                ▼                               ▼
+      固定版本能力 Adapter                 JobsDB 浏览器引擎
+      ├── ai-job-search                   ├── 公开职位抓取
+      └── career-ops                      ├── 登录态复用
+                                          └── Quick Apply
+```
+
+### 2.1 CC/Codex Skill
+
+仓库为两种 Agent 客户端提供语义一致的 Skill：
+
+- Codex/open-agent：`.agents/skills/jobsdb-assistant/SKILL.md`
+- Claude Code：`.claude/skills/jobsdb-assistant/SKILL.md`
+
+Skill 只调用稳定的 Python Agent 协议，并复制 Python 返回的 `session`、
+`work_id`、输入路径和输出路径。它不自行构造职位 ID，不查询 SQLite，也不通过
+阅读源码猜测下一步命令。
+
+评分默认使用一个持续运行的 Agent 串行处理当前 15 个职位。仓库保留固定三槽
+Pool 作为显式并行实验入口，但它目前不是日常默认流程。
+
+### 2.2 Python 主流程
+
+Python 是工作流的权威控制层，负责：
+
+- 安装和校验固定 SHA 的上游 fork；
+- 创建及恢复候选人画像、评分、材料和申请任务；
+- 生成不透明任务 ID，并校验 Agent 返回的 schema；
+- 管理任务租约、失败隔离、缓存和恢复；
+- 执行事实一致性、PDF 模板和材料版本检查；
+- 在 Dashboard 暴露人工审核入口；
+- 区分 Quick Apply 和 Apply 的最终执行路径。
+
+即使 CC/Codex 关闭，已经完成的步骤也会保留。再次启动 Skill 后，Python 会从
+本地状态继续未完成任务，而不是依赖 Agent 回忆此前对话。
+
+### 2.3 能力 Adapter
+
+主项目固定并只读消费两个 public fork：
+
+| 能力 | 来源 | 主项目职责 |
+|---|---|---|
+| 候选人资料提取与访谈 | `ai-job-search` | 保存原始回答，补齐必问信息，映射为不可变 Profile |
+| 定制材料能力 | `ai-job-search` | 为每个职位生成独立材料，并执行事实与格式校验 |
+| 职位匹配评分 | `career-ops` | 使用原生 A–F、1.0–5.0 评分，不增加第二套评分规则 |
+
+Adapter 把候选人简历和访谈结果映射为 Career Ops 能直接消费的 `cv.md`、
+`config/profile.yml` 和 `modes/_profile.md`。上游 fork 的代码不由本项目修改，
+升级时必须显式更新 manifest 中的固定提交。
+
+### 2.4 JobsDB 浏览器引擎
+
+JobsDB 自动化引擎基于 Python、Playwright 和持久化浏览器 Profile：
+
+- 公开职位搜索和评分不要求 JobsDB 登录；
+- Quick Apply 才复用用户手动建立的登录态；
+- Apply 表示需要进入企业网站，系统只打开 JobsDB 职位详情并交给用户；
+- 验证码、复杂表单、登录失效和不确定的提交结果都会转为人工处理；
+- 浏览器层通过 `BrowserPort` / `PageController` 与业务状态机解耦，测试可使用
+  Fake 实现而不启动真实浏览器。
+
+## 3. 完整数据流
+
+### 3.1 首次使用
+
+```text
+用户简历
+  → ai-job-search 提取事实
+  → 逐项画像访谈
+  → 用户确认 Candidate Profile
+  → 映射为 Career Ops Profile Bundle
+  → 保存不可变 Profile 版本
+```
+
+简历解析只是访谈输入，不代表画像已经完成。Python 会检查必问维度，只有用户
+回答、明确跳过或确认不提供后，才允许生成并确认画像。
+
+### 3.2 日常职位流程
+
+```text
+Dashboard 输入单一关键词
+  → 公开浏览器抓取最多 15 个历史未出现职位
+  → 保存不可变 JD Snapshot
+  → Python 创建评分任务
+  → Agent 完整翻译 JD 并执行 Career Ops A–F 评分
+  → Dashboard 人工选择职位
+  → 每个职位独立生成材料
+  → 用户审核、重生成、拒绝或批准
+  → Quick Apply 自动准备 / Apply 人工投递
+```
+
+归档当前批次后，旧批次不再显示在 Dashboard。相同关键词可以再次搜索，但新批次
+会排除仍在历史记录中的职位。归档超过 30 天的批次及其独占运行数据会在清理流程
+中删除。
+
+### 3.3 增量评分
+
+评分缓存身份由以下内容共同决定：
+
+```text
+JD hash
++ Candidate Profile / Profile Bundle hash
++ career-ops 固定提交
++ Adapter contract version
+```
+
+输入完全相同时复用已有评分；JD、画像或评分引擎版本发生变化时，创建新的评分。
+每个职位始终是独立任务，一项失败不会阻塞其他职位。
+
+## 4. Dashboard 与材料
+
+Dashboard 是本地审核界面，只监听 `127.0.0.1`。它负责展示和人工决策，不在
+浏览器 JavaScript 中执行 AI 推理。
+
+每个已选择职位支持两种材料模式：
+
+- **仅定制求职信**：生成一封 100–300 个英文单词的求职信；投递继续使用 JobsDB
+  默认简历。
+- **定制简历 + 求职信**：为每个职位分别生成一份英文 PDF 和一封 100–300 个
+  英文单词的求职信。
+
+定制简历以唯一的两页 v5 PDF 为模板，只允许修改：
+
+- `Professional Summary`
+- 四条 `Career Highlights`
+- 三项 `Core Competencies`
+
+`Work Experience` 及其后所有内容保持不变。Reviewer 和 ATS 建议只供参考，不
+阻塞材料；事实一致性仍是硬性检查。发现疑似虚构内容时，材料会保留并列明风险，
+用户可以拒绝、重新生成，或明确覆盖风险后批准。
+
+## 5. 申请执行边界
+
+| 职位类型 | 支持方式 |
+|---|---|
+| Quick Apply | 使用默认简历快捷投递，或使用已批准的定制材料准备申请 |
+| Apply | 打开 JobsDB 详情页，下载/复制材料后由用户进入企业网站投递 |
+
+Quick Apply 使用定制简历时：
+
+1. 保留 JobsDB 默认简历；
+2. 删除其他非默认简历；
+3. 上传并核对当前职位对应的定制 PDF；
+4. 填写对应求职信；
+5. 停在 Review 页面等待用户确认；
+6. 用户在 Dashboard 点击“确认提交”后才执行最终提交。
+
+仅定制求职信模式不删除、上传或切换简历。默认简历快捷入口也不会生成材料，
+并且明确使用 `JobsDB default CV`、`no cover letter`。
+
+## 6. 状态、隐私与目录
+
+Python 和 SQLite 是运行状态权威。主要私有目录包括：
+
+```text
+data/                         # SQLite、cookies、浏览器 Profile、日志
+workspace/ai-tasks/           # Agent 输入输出检查点
+workspace/materials/          # 每职位不可变材料版本
+workspace/resume-template-v5.pdf
+accounts/
+.env
+```
+
+这些路径均被 `.gitignore` 忽略。公开仓库只保存代码、schema、测试、Skill 和
+不含候选人数据的文档。
+
+主要代码结构：
+
+```text
+src/
+├── adapters/      # ai-job-search / career-ops schema-bound Adapter
+├── application/   # 画像、评分、材料、Agent 协议和申请主流程
+├── browser/       # 浏览器端口、Fake 与 Playwright 实现
+├── dashboard/     # 本地 FastAPI/Jinja2/Vanilla JS 审核界面
+├── domain/        # Profile、JD、评分、材料和申请契约
+├── integrations/  # 固定 fork manifest 与只读校验
+├── jobsdb/        # JobsDB 登录、选择器和 Apply 状态机
+├── materials/     # PDF、事实一致性和不可变版本校验
+├── storage/       # SQLite repositories、cookies 与 migrations
+└── orchestrator.py
+```
+
+技术栈：Python 3.11+、Playwright、SQLite、Pydantic、FastAPI、Jinja2、
+pytest、ruff、uv。
+
+---
+
+# 第二部分：使用方法和注意事项
+
+## 1. 安装
+
+推荐使用 Python 3.11 和 `uv`：
 
 ```bash
 uv venv --python 3.11
@@ -30,58 +248,45 @@ uv run jobsdb-assistant --version
 uv run jobsdb-assistant doctor
 ```
 
-依赖版本由 `uv.lock` 固定。其他电脑首次使用时，在仓库根目录执行以上相同命令，
-即可创建统一的项目 `.venv`；不要为 Dashboard 单独创建第二套环境。
+依赖版本由 `uv.lock` 固定。其他电脑或新用户应在仓库根目录执行相同命令，并
+使用项目统一的 `.venv`，不要为 Dashboard 单独创建第二套环境。
 
-将唯一的两页 v5 简历 PDF 放在私有路径
-`workspace/resume-template-v5.pdf`。也可通过
-`JOBSDB_RESUME_TEMPLATE_PATH=/absolute/path/resume-v5.pdf` 指定其他位置。
-career-ops 的 `cv.md` 只作为评分上下文，不会被误当成 PDF 模板。
+## 2. 准备简历
 
-### 2. 发现职位（不会投递）
+首次画像可以读取用户提供的 PDF 或其他受支持的简历资料。启动 Skill 时使用绝对
+路径传入，例如：
 
-```bash
-uv run jobsdb-assistant discover \
-  --keyword "Product Manager"
+```text
+使用 jobsdb-assistant，根据 /absolute/path/resume.pdf 启动求职助手
 ```
 
-地区固定为香港，其他搜索筛选使用 JobsDB 默认值。命令直接打开公开 JobsDB
-页面抓取并保存职位，不读取账户、不登录、不要求邮箱或密码，也不会进入申请
-状态机或提交申请。
+完整定制简历还需要唯一的两页 v5 模板，默认私有路径为：
 
-### 3. 在 Claude Code 或 Codex 中启动完整工作流
+```text
+workspace/resume-template-v5.pdf
+```
 
-仓库内置同一套 `jobsdb-assistant` Skill：
+也可以通过环境变量指定：
 
-- Codex/open-agent：`.agents/skills/jobsdb-assistant/SKILL.md`
-- Claude Code：`.claude/skills/jobsdb-assistant/SKILL.md`
+```bash
+export JOBSDB_RESUME_TEMPLATE_PATH=/absolute/path/resume-v5.pdf
+```
 
-在 CC/Codex 中只需说一次：
+Career Ops 的 `cv.md` 只用于评分上下文，不会被当作 PDF 模板。
 
-> 使用 jobsdb-assistant 启动求职助手
+## 3. 推荐启动方式：CC/Codex Skill
 
-如果是首次使用，可在同一句话中提供简历绝对路径。Skill 会运行
-`agent doctor → agent start → agent listen` 统一协议，并保持当前 Agent 会话。
-之后可以在 Dashboard 归档并搜索下一批职位或创建材料任务，无需再次返回 Agent
-说“继续”。
+在仓库目录打开 Claude Code 或 Codex，然后说：
 
-首次运行会：
+```text
+使用 jobsdb-assistant 启动求职助手
+```
 
-1. 按 manifest 安装两个固定 SHA 的 public fork；
-2. 使用 ai-job-search onboarding 能力提取资料，并完成 Python 强制校验的
-   画像访谈；薪资和推荐人等敏感项可以明确选择不提供；
-3. 展示候选人画像，等待你明确确认后保存 `CandidateProfile v1`；
-4. 等待用户在 Dashboard 输入关键词，或处理当前已有批次；
-5. 使用 career-ops 原生 A–F 规则评分；
-6. 输出完整本地报告。
+首次使用时在同一句话中提供简历绝对路径。Skill 会依次执行环境检查、启动或恢复
+Agent 会话，并打开本地 Dashboard。用户无需自己寻找职位 ID 或任务 ID。
+之后可以直接在 Dashboard 搜索、选择和审核，无需再次返回 Agent 说“继续”。
 
-后续运行默认复用同一个未停止 Agent 会话、已安装的 fork、已确认画像和未变化
-JD 的评分缓存。只有明确要求更新画像时才创建新版本；不会自动覆盖旧版本或自动
-更新 fork。CC/Codex 关闭后 AI 推理会暂停，再次启动 Skill 会从 SQLite 中恢复
-未完成任务，不会重复生成评分或材料。
-
-Python CLI 是 Skill 使用的稳定协议，所有内部 ID 都由 Python 保存，Skill 只
-复制不透明的 `session` 和 `work_id`：
+对应的稳定 Python 协议为：
 
 ```bash
 uv run jobsdb-assistant agent doctor
@@ -89,280 +294,221 @@ uv run jobsdb-assistant agent start --source /absolute/path/resume.pdf
 uv run jobsdb-assistant agent listen --session SESSION
 ```
 
-`agent listen` 在 Dashboard 暂时没有任务时不会返回；新评分或材料任务到达后才把
-唯一工作交给当前 Agent。`agent next --session SESSION --wait 0` 只保留为一次性
-诊断命令，不用于正常持续运行。
+正常使用不需要手工执行这些命令。`SESSION` 和工作 ID 都是不透明值，只能复制
+Python 返回的原值，不能自行拼接。
+`agent next --session SESSION --wait 0` 只用于一次性诊断，不代替持续运行的
+`agent listen`。
 
-包含简历、画像、JD 和 AI 结果的检查点保存在忽略的
-`workspace/ai-tasks/`。评分阶段不会生成申请材料或执行投递；材料只在用户
-通过 Dashboard 选定职位后生成。
-单份简历首次导入不能直接生成画像提案：必须先回答或明确跳过全部必问维度，
-Python 才允许 Agent 提交画像。
+## 4. 首次画像流程
 
-### 4. 单独启动本地审核 Dashboard（诊断用途）
+首次启动会：
 
-正常使用无需执行本节命令，`agent start` 会启动或复用 Dashboard。以下入口保留
-给开发者诊断服务。
+1. 安装或校验 manifest 中固定提交的两个 public fork；
+2. 解析用户简历；
+3. 逐项询问目标职位、工作内容、公司和团队偏好、薪酬、推荐人及其他必问信息；
+4. 生成完整候选人画像供用户检查；
+5. 用户明确确认后保存不可变 Profile 版本；
+6. 等待 Dashboard 创建职位批次。
 
-先检查依赖、SQLite schema、数据数量和默认端口：
+敏感项目可以选择不提供，但 Agent 不能替用户猜测答案。只有用户明确要求更新画像
+时才创建新版本；普通的第二次启动会复用已有画像和已安装 fork。
+
+## 5. Dashboard 日常流程
+
+Dashboard 默认地址：
+
+```text
+http://127.0.0.1:8765
+```
+
+推荐操作顺序：
+
+1. 保持当前 CC/Codex Agent 会话运行。
+2. 在“下一批搜索关键词”输入一个关键词，例如 `AI Lead`。
+3. 点击“归档当前批次并抓取下一批”。
+4. 后台公开浏览器抓取最多 15 个历史未出现职位，并准备评分任务。
+5. Agent 逐个完成完整简体中文 JD 翻译和 Career Ops A–F 评分。
+6. 点击“刷新批次状态”和“刷新评分结果”查看最新结果。
+7. 勾选一个或多个职位。
+8. 选择“仅定制求职信”或“定制简历 + 求职信”。
+9. 打开每个职位的材料页面进行预览、批准、拒绝或重新生成。
+10. 对批准材料点击“准备申请”；Quick Apply 在 Review 页面再次等待最终确认。
+
+Dashboard 不会自动刷新整个页面。抓取、评分和材料生成完成后，需要用户点击对应的
+手动刷新按钮。
+
+## 6. Dashboard 诊断启动
+
+通常 `agent start` 会启动或复用 Dashboard。只有诊断时才需要手工执行：
 
 ```bash
 uv run python -m src.main dashboard doctor
-```
-
-然后启动服务：
-
-```bash
 uv run python -m src.main dashboard start
 ```
 
-服务固定监听 `127.0.0.1:8765`，健康检查为
-`http://127.0.0.1:8765/health`，并自动打开本地浏览器。使用 `Ctrl+C`
-停止。若不希望自动打开浏览器：
+不自动打开浏览器：
 
 ```bash
 uv run python -m src.main dashboard start --no-browser
 ```
 
-若端口被占用，命令会明确失败，不会静默换端口；可显式指定：
+前台运行时使用 `Ctrl+C` 停止 Dashboard。
+
+端口被占用时命令会明确失败。可显式改用其他端口：
 
 ```bash
 uv run python -m src.main dashboard doctor --port 8877
 uv run python -m src.main dashboard start --port 8877
 ```
 
-Dashboard 默认只显示已评分职位，也可切换到全部职位查看
-`Pending evaluation`。展开职位可检查 Career Ops 原生 A–F findings、
-evidence、Profile/JD/engine 版本溯源；页面不会自行补造逐条 Profile
-判定。
+健康检查：
 
-每个职位可立即勾选或取消，状态保存在本地 SQLite。选择一个或多个职位后，可
-点击以下任一入口，Python 会为每个职位创建独立任务：
-
-- **仅定制求职信**：生成 100–300 个英文单词的求职信，不生成 PDF；批准后
-  投递使用 JobsDB 当前默认简历，不删除、上传或切换简历。
-- **定制简历 + 求职信**：每个职位独立生成一份英文简历 PDF 和一封
-  100–300 个英文单词的求职信；选择五个职位会得到五套互不覆盖的材料。
-- **Quick Apply**：可以使用已批准的职位材料准备申请，也可以在明确确认后直接使用
-  **JobsDB default CV**、**no cover letter** 投递当前单个职位。
-- **Apply**：只提供打开 JobsDB 职位详情的入口，由用户找到企业网站并人工投递。
-
-当前 CC/Codex Agent 会话通过以下稳定 Python 协议逐个处理材料任务：
-
-```bash
-uv run python -m src.main workflow material-pending
-uv run python -m src.main workflow material-submit --task-id TASK_ID --result RESULT_JSON
-uv run python -m src.main workflow material-progress --batch-id BATCH_ID
+```text
+http://127.0.0.1:8765/health
 ```
 
-材料保存在私有的 `workspace/materials/<job-id>/v<version>/`。完整模式预览
-PDF；仅求职信模式明确显示将使用 JobsDB 默认简历。两种模式都展示求职信、
-修改摘要、Reviewer 建议、ATS 建议和事实一致性检查：
+## 7. 登录与申请
 
-- Reviewer 与 ATS 只展示建议，不阻塞批准。
-- 发现疑似虚构内容时材料仍保留，但标记为事实风险；用户可拒绝、重新生成，
-  或勾选事实风险覆盖后批准。
-- 拒绝不会删除材料；重新生成会创建不可变的 N+1 版本并保留历史。
-- 只有用户批准且版式完整的版本才可进入投递。
+职位抓取、JD 翻译和评分不需要 JobsDB 登录。只有执行 Quick Apply 时才需要登录。
 
-批准后，Quick Apply 显示“使用已批准材料准备申请”。前台 Worker 会串行执行：
-
-1. 完整模式保留默认简历、删除其他非默认简历，再上传并校验当前职位的定制 PDF；
-2. 仅求职信模式跳过全部远程简历管理操作，继续使用 JobsDB 默认简历；
-3. 根据模式选择定制简历或默认简历，并填写对应求职信；
-4. 停在 Review 页面，等待用户在 Dashboard 点击“确认提交”；
-5. 复用同一浏览器页面完成提交并记录结果。
-
-关闭 Dashboard 会安全停止 Worker。若提交临界阶段发生异常，状态会标记为
-“提交结果待确认”，不会盲目重复提交。Apply 职位在完整模式提供定制简历下载，
-仅求职信模式使用 JobsDB 默认简历；两者都会复制求职信并打开 JobsDB 详情页，
-由用户自行进入企业网站投递。
-
-直接 Quick Apply 复用原有浏览器状态机、登录态、频率限制和申请历史。同一时间
-只允许一个任务；验证码、登录失效或复杂表单会转为人工处理。点击前确认框会明确
-说明使用默认 CV、不附求职信以及提交不可由本系统撤回。
-
-### 5. 登录并投递（manual 模式，无需存凭证）
+首次登录可使用 manual 模式：
 
 ```bash
-uv run jobsdb-assistant start --login-mode manual --max-jobs 5
+uv run jobsdb-assistant start --login-mode manual --max-jobs 1
 ```
 
-首次运行会打开浏览器等你手动登录 JobsDB（可过验证码）。登录态存入持久化 profile（`data/browser_profile/`），之后长期复用，无需再登录。
+浏览器打开后由用户完成登录和验证码。登录态保存在忽略的
+`data/browser_profile/`，后续运行会复用，不需要把邮箱或密码写入仓库。
 
-### 6. 投递
+兼容的上游直接投递命令仍然保留：
 
 ```bash
-scripts/run_apply.sh 5     # 一键投递(推荐),先校验登录 cookies 再启动;不传数字默认 5
-python -m src.main stats   # 查看统计
+scripts/run_apply.sh 5
+uv run jobsdb-assistant stats
 ```
 
-### 7. Claude Code 投递 Skill：说"帮我投5个"
+日常产品流程优先使用 Dashboard，因为它包含职位评分、材料审核、申请准备和最终
+确认门禁。
 
-仓库附带 skill 文档 [docs/skills/start-apply.md](docs/skills/start-apply.md)，复制到 Claude Code 的项目 skills 目录即可启用：
+## 8. Agent 会话与恢复
+
+- 评分和材料生成需要当前 CC/Codex Agent 会话保持运行。
+- 关闭 Agent 后，Dashboard 和本地数据仍然保留，但新的 AI 任务不会继续推理。
+- 再次运行 Skill 会恢复未完成任务，不会重新生成已有缓存结果。
+- `queued > 0` 或 `claimed > 0` 都不代表任务完成。
+- 如果用户明确停止，应由 Skill 执行：
 
 ```bash
-mkdir -p .claude/skills/start-apply
-cp docs/skills/start-apply.md .claude/skills/start-apply/SKILL.md
+uv run jobsdb-assistant agent stop --session SESSION
 ```
 
-之后在 Claude Code 里直接说 `帮我投5个`（或 `投10个` / `开始投递`）。Skill 会自动：解析数量 → 检查登录态 → 后台启动 `run_apply.sh` → 盯日志 → 按 ✅/⏭️/❌ 表格汇报（失败附原因和截图）。判读规则已内置，如 `⏭️ skipped` 是标准 Apply 的正常跳过，不是失败。
-
-## 📋 投递行为
-
-- **Quick Apply** → 自动投递三步向导：选 "Don't include a cover letter" → Profile 页一路 Continue（漏填下拉自动补填，选最后一个有效选项）→ 点 Submit 并确认成功页
-- **Apply**（跳外部网站）→ 当前引擎不自动提交，保留为后续人工打开详情页
-- **验证码 / 复杂表单 / 登录过期** → 弹 macOS 通知，等人工处理
-- 频率控制：每小时 ≤10 次，间隔 ≥3 分钟，防封号
-
-## 🧹 清理运行时数据
+只读状态检查：
 
 ```bash
-python scripts/clean_data.py            # dry-run,只列出要删的
-python scripts/clean_data.py --apply    # 实际删除(只动 data/,不碰凭证)
+uv run jobsdb-assistant agent status --session SESSION
 ```
 
-## 👥 多账户（可选）
+当前默认使用单 Agent 串行评分。三路 Pool 仅供显式并行基准测试，不建议在日常
+批次中自行启动。
 
-```bash
-python -m src.main account add personal --email you@example.com
-python -m src.main account use personal
-```
+## 9. 重要注意事项
 
-每个账户独立的浏览器 profile / cookies / 投递记录（`data/browser_profile/<alias>/` 等），切换账户 = 全新浏览器身份。
+### 9.1 人工门禁
 
-## 🔒 安全
+以下操作必须由用户完成：
 
-本仓库不含真实凭证：`accounts/`、`data/`、`workspace/`、`.env` 和本地
-agent 设置均受 `.gitignore` 保护。每次提交前运行：
+- 回答画像问题并确认最终 Profile；
+- 批准、拒绝、重新生成材料或覆盖事实风险；
+- 确认 Quick Apply Review 页面和最终提交；
+- 处理登录、验证码、复杂表单和不确定提交结果；
+- 完成所有 Apply 类型职位的企业网站申请。
+
+Agent 不得根据沉默推断批准，也不得替用户点击不可撤回的最终提交。
+
+### 9.2 简历与求职信
+
+- 完整模式为每个职位生成独立 PDF，不会把多个职位合并成一份简历。
+- 只允许修改 Summary、四条 Highlights 和三项 Competencies。
+- 工作经历、学历和之后的模板内容不能改变。
+- 求职信使用英文，长度为 100–300 个单词。
+- Reviewer 和 ATS 是建议；疑似虚构事实必须展示并等待用户决定。
+- JobsDB 默认简历必须保留；完整模式会保留默认简历、删除其他非默认简历。
+
+### 9.3 Quick Apply 与 Apply
+
+- Quick Apply 可以由浏览器状态机准备，但最终提交仍需要用户确认。
+- Apply 不做外部企业网站自动化，只打开 JobsDB 详情页并交接材料。
+- 默认简历快捷入口不生成材料、不附求职信。
+- 同一时间只执行一个申请任务，避免简历和职位发生错配。
+
+### 9.4 JobsDB 风控
+
+- 请遵守 JobsDB 使用条款。
+- 当前频率限制为每小时最多 10 次申请、申请间隔至少 3 分钟。
+- 拟人化鼠标、会话持久化和浏览器指纹处理只能降低风险，不能保证零风控。
+- 验证码或账户限制出现时应停止自动化并人工处理。
+
+### 9.5 隐私与公开仓库
+
+提交前运行：
 
 ```bash
 uv run python scripts/privacy_guard.py
+git status --short
 ```
 
-守卫会检查 Git 已跟踪文件中的私有路径和疑似密钥。详见
-[PRIVACY_CHECKLIST.md](PRIVACY_CHECKLIST.md)。
+不要提交：
 
-## ⚠️ 注意
+- 真实简历、Candidate Profile 或访谈回答；
+- `.env`、账户、cookies 或浏览器 Profile；
+- SQLite、任务检查点、定制材料、日志、截图；
+- 本机绝对路径、邮箱、密码、Token 或密钥。
 
-- 请遵守 JobsDB 使用条款；每次投递数量不宜过多，避免账号被限制
-- 拟人化鼠标（Bezier 曲线）+ 指纹伪装 + 会话持久化降低检测风险，但不保证零风控
+详见 [PRIVACY_CHECKLIST.md](PRIVACY_CHECKLIST.md)。
 
-## 📝 更新日志
+### 9.6 清理运行时数据
 
-### v0.6.0 (2026-07-28) — Closed-loop Applications
+先执行 dry-run：
 
-- 固定 v5 两页模板，仅定制 Summary、四条 Highlights 和三项 Competencies
-- Python 渲染 PDF，并硬性校验页数、冻结区域文本/坐标、文件大小和可提取文本
-- 持久化、可恢复且幂等的职位申请状态和审计事件
-- Quick Apply 串行替换远端简历、校验唯一文件名、填写英文求职信
-- 支持“仅定制求职信”和“定制简历 + 求职信”两个独立入口
-- 仅求职信模式保留 JobsDB 默认简历并跳过远程简历管理
-- “准备申请”和“确认提交”两阶段人工门禁，浏览器会话持续到最终结果
-- Apply 职位提供完整人工交接，不自动操作企业外部网站
-- 保留 v0.4 的默认 CV/no cover letter 快捷入口
-
-### v0.5.0 (2026-07-27) — Tailored Materials
-
-- 多职位批量创建、每职位独立且可恢复的材料任务
-- 固定 `ai-job-search` fork 能力的 schema-bound Adapter，不修改上游代码
-- 每职位英文定制简历 PDF 与 100–300 词英文求职信
-- Reviewer、ATS、事实一致性检查及简体中文 Dashboard 反馈
-- PDF/求职信预览、下载/复制、批准、拒绝、事实风险覆盖和 N+1 重新生成
-- 私有文件哈希、路径逃逸/软链接/伪 PDF 防护和不可变版本安装
-- CC/Codex 前台 Agent 工作流；单任务失败隔离，Python/SQLite 为状态权威
-- 明确边界：v0.5 不执行职位投递
-
-### v0.4.0 (2026-07-27) — Review Dashboard
-
-- FastAPI + Jinja2 + Vanilla JS 本地审核界面，仅监听 `127.0.0.1`
-- 已评分/全部职位、搜索、分数、Apply 类型和选择状态筛选
-- Career Ops 原生 A–F findings/evidence、Profile/JD/engine 溯源可视化
-- SQLite 即时保存 `waiting_for_materials` 选择状态
-- 单职位 Quick Apply：JobsDB 默认 CV、不附求职信、显式确认、持久任务状态
-- Apply 职位保持人工打开和投递，不进入自动浏览器状态机
-- 统一 `.venv`、可复现 Dashboard extras、doctor/health/start 操作文档
-
-### v0.3.0 (2026-07-24) — Candidate & Evaluation
-
-- 固定 SHA、只读校验的 ai-job-search 与 career-ops public forks
-- ai-job-search 的完整 CV 解析与逐项访谈综合，原始回答由 Python 保存
-- 私有、不可变的 career-ops 原生画像包：`cv.md`、`config/profile.yml`、
-  `modes/_profile.md`
-- ai-job-search 候选人 onboarding、事实证据、显式确认和不可变画像版本
-- Python 强制的 typed 画像访谈门禁，禁止 Agent 跳过缺失信息提问
-- career-ops 原生 A–F、1.0–5.0 职位评分，不混合评分或自定义加权
-- `JD hash + profile bundle hash + engine SHA + contract` 精确增量缓存
-- 私有、原子、schema-bound CC/Codex AI 检查点
-- 当前 JobsDB 职位安全排序报告；不渲染完整 JD 或候选人原始资料
-
-### v0.2.0 (2026-07-24) — JobsDB Discovery
-
-- 单一关键词搜索，地区默认为香港，每次最多收集 50 个唯一职位
-- 公开浏览器发现流程与账户、密码和登录完全隔离
-- 复用现有抓取器的滚动能力，以达到上限或连续无新增为停止条件
-- 保存完整 JD，并分类为 `Quick Apply`、`Apply` 或 `unknown`
-- SHA-256 不可变 JD 快照，支持新增、未变化和内容变更检测
-- `discover` 与申请队列隔离，不会触发投递
-
-### v0.1.0 (2026-07-23) — Public-safe Foundation
-
-- 单一产品版本、领域契约和 SQLite migration ledger
-- 不回显私有路径或凭证的 `doctor` 环境诊断
-- Git tracked-file 隐私守卫和独立 CI privacy gate
-- 408 个确定性测试，line+branch 综合覆盖率 82.49%
-- 保留上游 v2.0 Quick Apply 行为
-
-### Upstream v2.0.0 (2026-07-22) — TDD 重构 + e2e 实战加固
-
-- **重构**（行为与 v1.0 一致）：浏览器抽象层（Protocol + Fake 实现）、工厂模式 DI、543 行 apply_flow 拆成状态机 + 7 个 StepHandler、异常三分法清零 8 处静默吞错、覆盖率 39%→65%、ruff 221→0
-- **新能力**：manual 登录模式（免存凭证）、`start-apply` skill + `run_apply.sh` 一键投递
-- **e2e 加固**：只投 Quick Apply（标准 Apply 记 SKIPPED）、Cover Letter 按 label 文本选择（radio id 动态）、Continue 推进 + 校验自动补填、成功判定扩充、视口外元素先滚动再点、超时单位修复、Apply 按钮重渲染自动重试
-- 339 个测试全绿；真实 5 职位会话成功率 100%
-
-### Upstream v0.1.0 (2026-07-20)
-
-首个版本：Quick Apply 识别、Cover Letter 自动处理、多账户、反检测、投递统计。
-
----
-
-## 🏗️ 技术栈与架构（开发者向，使用无需阅读）
-
-**技术栈**：Python 3.11+ · Playwright · SQLite · Pydantic · pytest · ruff · uv
-
-**架构要点**（v2.0 TDD 重构，Strangler Fig 分 6 阶段迁移）：
-
-- `BrowserPort` / `PageController`（Protocol）依赖反转：`jobsdb/*` 不 import Playwright；测试用 `FakePageController` 毫秒级跑，不起浏览器
-- `ComponentFactory` DI：`Orchestrator` 的 10 个依赖由工厂注入，`FakeFactory` 支持全流程内存单测
-- 投递状态机：`apply/flow.py` + `steps/` 7 个 StepHandler + `detectors.py` 纯查询
-- 异常三分法：A 重试 / B 降级 / C 上抛
-
-```
-src/
-├── adapters/    # ai-job-search / career-ops schema-bound 检查点
-├── application/ # 候选人画像、增量评分和材料生成主流程
-├── browser/     # 浏览器抽象层(ports / fake / playwright 实现 / stealth)
-├── domain/      # 画像、JD、原生 A–F 评分与材料契约
-├── integrations/# 固定 fork manifest 与只读校验
-├── jobsdb/      # JobsDB 交互(apply 状态机、login、selectors)
-├── materials/   # 私有材料校验与不可变安装
-├── reporting/   # 本地安全评分报告
-├── simulation/  # 人类行为模拟(鼠标 Bezier、拟人打字)
-├── scheduler/   # 频率控制与队列
-├── storage/     # SQLite + cookies
-└── orchestrator.py  # 协调器(工厂注入)
+```bash
+python scripts/clean_data.py
 ```
 
-**测试**（三分类）：`uv run pytest` 默认跑 unit + characterization（不起浏览器）；
-e2e 需真实登录，默认跳过。本地 release gate：
+确认后再删除：
+
+```bash
+python scripts/clean_data.py --apply
+```
+
+该脚本只处理本地运行目录。删除运行数据可能导致历史任务、登录态和材料无法恢复，
+执行前应确认输出范围。
+
+## 10. 开发与验证
+
+默认测试运行 unit 与 characterization，不启动真实 JobsDB 浏览器：
 
 ```bash
 uv run ruff check src/ tests/ scripts/privacy_guard.py
 uv run pytest -m 'not e2e' --cov=src --cov-branch --cov-report=term-missing
 ```
 
-详见 [v0.2.0 实现计划](docs/superpowers/plans/2026-07-24-v0.2.0-jobsdb-discovery.md)。
+E2E 测试需要真实网络、JobsDB 登录和人工配合，默认跳过。固定的
+`ai-job-search` 与 `career-ops` integration 工作区必须保持只读、提交 SHA
+不变。
 
-## 📄 许可证
+## 11. 版本范围
+
+- `v0.1.0`：公开仓库安全基础、领域契约和 SQLite migration。
+- `v0.2.0`：JobsDB 香港公开职位抓取和不可变 JD Snapshot。
+- `v0.3.0`：ai-job-search 候选人访谈、Career Ops A–F 评分及增量缓存。
+- `v0.4.0`：本地简体中文审核 Dashboard。
+- `v0.5.0`：每职位独立定制材料、预览、事实审核和版本管理。
+- `v0.6.0`：Quick Apply/Apply 申请执行闭环。
+- `v0.8.0`：统一 CC/Codex Agent 工作协议、任务恢复和 Dashboard 驱动流程。
+
+历史 `v2.0-phase*` 标签属于上游 JobsDB 自动投递引擎重构阶段，不代表本产品
+版本。
+
+## 许可证
 
 MIT License
