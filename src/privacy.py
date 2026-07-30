@@ -18,6 +18,9 @@ class PrivacyFinding:
 
 
 _PRIVATE_ROOTS = {"data", "workspace", "logs"}
+_PUBLIC_GENERATED_FILES = {
+    "docs/images/jobsdb-assistant-dashboard.png",
+}
 _PRIVATE_SUFFIXES = {
     ".db",
     ".sqlite",
@@ -55,6 +58,8 @@ def _private_path_reason(path: str) -> str | None:
     if not parts:
         return None
 
+    if normalized in _PUBLIC_GENERATED_FILES:
+        return None
     if parts[0] in _PRIVATE_ROOTS:
         return "private runtime path"
     if parts[0] == "integrations" and normalized != "integrations/manifest.json":

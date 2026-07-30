@@ -43,6 +43,27 @@ def test_guard_allows_public_examples_and_source(tmp_path: Path) -> None:
     assert scan_tracked_files(tmp_path, tracked=tracked) == []
 
 
+def test_guard_allows_only_approved_readme_product_image(
+    tmp_path: Path,
+) -> None:
+    findings = scan_tracked_files(
+        tmp_path,
+        tracked=[
+            "docs/images/jobsdb-assistant-dashboard.png",
+            "docs/images/unapproved-dashboard.png",
+        ],
+    )
+
+    assert [
+        (finding.path, finding.reason) for finding in findings
+    ] == [
+        (
+            "docs/images/unapproved-dashboard.png",
+            "sensitive generated file",
+        )
+    ]
+
+
 def test_guard_rejects_secret_shaped_content(tmp_path: Path) -> None:
     secret_file = tmp_path / "config.py"
     synthetic_token = "ghp_" + "123456789012345678901234567890123456"
