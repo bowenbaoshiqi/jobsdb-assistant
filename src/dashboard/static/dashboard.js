@@ -141,7 +141,12 @@ function renderTrace(job) {
 
   const jd = document.createElement("section");
   jd.className = "jd";
-  jd.append(text("h3", "当前职位描述"));
+  jd.append(text(
+    "h3",
+    job.jd_translation_available
+      ? "职位描述（简体中文翻译）"
+      : "当前职位描述",
+  ));
   jd.append(text("pre", job.jd_text));
   trace.append(jd);
   details.append(trace);

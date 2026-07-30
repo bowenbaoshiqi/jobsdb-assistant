@@ -21,6 +21,7 @@ from rich.table import Table
 from config.settings import get_config
 from src.accounts.registry import Account, AccountRegistry
 from src.doctor import CheckStatus, run_checks
+from src.domain.agent_work import AgentNextResult, AgentWorkStatus
 from src.jobsdb.search import normalize_keyword
 from src.monitor.logger import configure_logger
 from src.orchestrator import Orchestrator
@@ -40,6 +41,10 @@ workflow_app = typer.Typer(help="候选人画像与职位评分工作流")
 app.add_typer(workflow_app, name="workflow")
 dashboard_app = typer.Typer(help="本地职位审核 Dashboard")
 app.add_typer(dashboard_app, name="dashboard")
+agent_app = typer.Typer(help="统一 Agent 工作协议")
+app.add_typer(agent_app, name="agent")
+agent_pool_app = typer.Typer(help="并行职位评分池")
+agent_app.add_typer(agent_pool_app, name="pool")
 
 console = Console()
 
@@ -56,8 +61,317 @@ def _build_material_generation_service():
     return build_material_generation_service()
 
 
+def _build_agent_work_coordinator():
+    from src.application.agent_runtime import build_agent_work_coordinator
+
+    return build_agent_work_coordinator()
+
+
+def _ensure_agent_dashboard(*, port: int) -> str:
+    from src.agent.dashboard import ensure_agent_dashboard
+
+    return ensure_agent_dashboard(port=port)
+
+
+def _run_agent_doctor(port: int) -> tuple[dict[str, str], ...]:
+    from src.agent.doctor import run_agent_doctor
+
+    return run_agent_doctor(port)
+
+
 def _print_json(payload: dict) -> None:
     typer.echo(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+
+
+@agent_app.command("doctor")
+def agent_doctor(
+    port: int = typer.Option(8765, "--port", min=1, max=65535),
+) -> None:
+    """检查统一协议、新环境、锁定集成和本地 Dashboard。"""
+    checks = _run_agent_doctor(port)
+    failed = any(item["status"] == "fail" for item in checks)
+    _print_json({
+        "protocol_version": 1,
+        "status": "failed" if failed else "ready",
+        "checks": checks,
+    })
+    if failed:
+        raise typer.Exit(code=1)
+
+
+@agent_app.command("start")
+def agent_start(
+    port: int = typer.Option(8765, "--port", min=1, max=65535),
+    source: list[Path] = typer.Option([], "--source"),  # noqa: B008
+    update_profile: bool = typer.Option(False, "--update-profile"),
+) -> None:
+    """启动或恢复一个仅暴露不透明工作 ID 的 Agent 会话。"""
+    now = datetime.now(UTC)
+    coordinator = _build_agent_work_coordinator()
+    session = coordinator.start(now=now)
+    coordinator.prepare_profile(
+        source_documents=tuple(str(path) for path in source),
+        update=update_profile,
+        now=now,
+    )
+    _ensure_agent_dashboard(port=port)
+    _print_json({
+        "protocol_version": 1,
+        "state": "active",
+        "session": session.id,
+        "dashboard_url": f"http://127.0.0.1:{port}",
+    })
+
+
+@agent_app.command("next")
+def agent_next(
+    session: str = typer.Option(..., "--session"),
+    wait: int = typer.Option(30, "--wait", min=0, max=30),
+) -> None:
+    """等待并领取唯一的下一项 Agent 工作。"""
+    result = _build_agent_work_coordinator().next(
+        session,
+        wait_seconds=wait,
+    )
+    _print_json(result.model_dump(mode="json"))
+
+
+@agent_app.command("listen")
+def agent_listen(
+    session: str = typer.Option(..., "--session"),
+) -> None:
+    """持续监听，队列暂时为空时不退出 Agent 工具调用。"""
+    coordinator = _build_agent_work_coordinator()
+    while True:
+        result = coordinator.next(
+            session,
+            wait_seconds=30,
+        )
+        if result.state is AgentWorkStatus.IDLE:
+            continue
+        _print_json(result.model_dump(mode="json"))
+        return
+
+
+@agent_app.command("submit")
+def agent_submit(
+    session: str = typer.Option(..., "--session"),
+    work_id: str = typer.Option(..., "--work-id"),
+    result: Path = typer.Option(..., "--result"),  # noqa: B008
+) -> None:
+    """按不透明 work_id 校验并提交 Agent 结果。"""
+    record = _build_agent_work_coordinator().submit(
+        session_id=session,
+        work_id=work_id,
+        result_path=result,
+        now=datetime.now(UTC),
+    )
+    _print_json({
+        "protocol_version": 1,
+        "state": record.status.value,
+        "work_id": record.id,
+        "result_hash": record.result_hash,
+    })
+
+
+@agent_app.command("fail")
+def agent_fail(
+    session: str = typer.Option(..., "--session"),
+    work_id: str = typer.Option(..., "--work-id"),
+    error: Path = typer.Option(..., "--error"),  # noqa: B008
+) -> None:
+    """记录一项隔离失败并允许队列继续。"""
+    record = _build_agent_work_coordinator().fail(
+        session_id=session,
+        work_id=work_id,
+        error_message=error.read_text(encoding="utf-8"),
+        now=datetime.now(UTC),
+    )
+    _print_json({
+        "protocol_version": 1,
+        "state": record.status.value,
+        "work_id": record.id,
+    })
+
+
+@agent_app.command("stop")
+def agent_stop(
+    session: str = typer.Option(..., "--session"),
+) -> None:
+    """停止 Agent 会话并释放未完成的工作租约。"""
+    record = _build_agent_work_coordinator().stop(
+        session,
+        now=datetime.now(UTC),
+    )
+    _print_json({
+        "protocol_version": 1,
+        "state": record.status.value,
+        "session": record.id,
+    })
+
+
+@agent_app.command("status")
+def agent_status(
+    session: str = typer.Option(..., "--session"),
+) -> None:
+    """查看当前 Agent 工作计数，不暴露内部任务标识。"""
+    status = _build_agent_work_coordinator().status(
+        session,
+        now=datetime.now(UTC),
+    )
+    _print_json({
+        "protocol_version": 1,
+        **status,
+    })
+
+
+def _pool_payload(pool) -> dict:
+    return {
+        "pool": pool.id,
+        "requested_concurrency": pool.requested_concurrency,
+        "actual_concurrency": pool.actual_concurrency,
+        "pool_state": pool.status.value,
+        "slots": [
+            {
+                "slot": slot.slot_token,
+                "ordinal": slot.ordinal,
+                "status": slot.status.value,
+                "generation": slot.generation,
+                "assignment_count": slot.assignment_count,
+            }
+            for slot in pool.slots
+        ],
+        "capability_context": pool.capability_context_id,
+        "profile_context": pool.profile_context_id,
+    }
+
+
+@agent_pool_app.command("start")
+def agent_pool_start(
+    session: str = typer.Option(..., "--session"),
+    capability_context: str = typer.Option(
+        "capability-current", "--capability-context"
+    ),
+    profile_context: str = typer.Option(
+        "profile-current", "--profile-context"
+    ),
+) -> None:
+    """创建当前职位评分的三槽池，不领取任务。"""
+    pool = _build_agent_work_coordinator().pool_start(
+        session_id=session,
+        capability_context_id=capability_context,
+        profile_context_id=profile_context,
+        now=datetime.now(UTC),
+    )
+    _print_json({"protocol_version": 1, **_pool_payload(pool)})
+
+
+@agent_pool_app.command("ready")
+def agent_pool_ready(
+    session: str = typer.Option(..., "--session"),
+    pool: str = typer.Option(..., "--pool"),
+    slot: str = typer.Option(..., "--slot"),
+    capability_context: str = typer.Option(..., "--capability-context"),
+    profile_context: str = typer.Option(..., "--profile-context"),
+) -> None:
+    """登记一个已加载固定上下文的评分 Worker。"""
+    del session
+    record = _build_agent_work_coordinator().pool_ready(
+        pool_id=pool,
+        slot_token=slot,
+        capability_context_id=capability_context,
+        profile_context_id=profile_context,
+        now=datetime.now(UTC),
+    )
+    _print_json({
+        "protocol_version": 1,
+        "pool": record.pool_id,
+        "slot": record.slot_token,
+        "ordinal": record.ordinal,
+        "status": record.status.value,
+    })
+
+
+@agent_pool_app.command("claim")
+def agent_pool_claim(
+    session: str = typer.Option(..., "--session"),
+    pool: str = typer.Option(..., "--pool"),
+    slot: str = typer.Option(..., "--slot"),
+) -> None:
+    """为一个 ready Worker 原子领取一个职位评分任务。"""
+    coordinator = _build_agent_work_coordinator()
+    record = coordinator.pool_claim(
+        session_id=session,
+        pool_id=pool,
+        slot_token=slot,
+        now=datetime.now(UTC),
+    )
+    if record is None:
+        _print_json({
+            "protocol_version": 1,
+            "state": "idle",
+            "pool": pool,
+            "slot": slot,
+        })
+        return
+    _print_json(
+        AgentNextResult(
+            state=AgentWorkStatus.CLAIMED,
+            work=coordinator._envelope(session, record),
+        ).model_dump(mode="json")
+    )
+
+
+@agent_pool_app.command("status")
+def agent_pool_status(
+    session: str = typer.Option(..., "--session"),
+    pool: str = typer.Option(..., "--pool"),
+) -> None:
+    """查看评分池计数，不暴露内部职位或任务 ID。"""
+    del session
+    _print_json({
+        "protocol_version": 1,
+        **_build_agent_work_coordinator().pool_status(pool),
+    })
+
+
+@agent_pool_app.command("heartbeat")
+def agent_pool_heartbeat(
+    session: str = typer.Option(..., "--session"),
+    pool: str = typer.Option(..., "--pool"),
+    live_slot: list[str] = typer.Option([], "--live-slot"),  # noqa: B008
+) -> None:
+    """续租当前仍由客户端存活的评分 Worker 槽位。"""
+    del session
+    count = _build_agent_work_coordinator().pool_heartbeat(
+        pool_id=pool,
+        live_slot_tokens=tuple(live_slot),
+        now=datetime.now(UTC),
+    )
+    _print_json({
+        "protocol_version": 1,
+        "pool": pool,
+        "renewed_slots": count,
+    })
+
+
+@agent_pool_app.command("stop")
+def agent_pool_stop(
+    session: str = typer.Option(..., "--session"),
+    pool: str = typer.Option(..., "--pool"),
+) -> None:
+    """停止评分池并释放未完成的职位评分。"""
+    del session
+    released = _build_agent_work_coordinator().pool_stop(
+        pool_id=pool,
+        now=datetime.now(UTC),
+    )
+    _print_json({
+        "protocol_version": 1,
+        "pool": pool,
+        "state": "stopped",
+        "released": released,
+    })
 
 
 def _onboarding_payload(outcome) -> dict:

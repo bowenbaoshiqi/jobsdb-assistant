@@ -284,6 +284,7 @@ def build_production_app():
                 repository=material_generation.repository,
                 generation=material_generation,
                 materials_root=Path("workspace/materials"),
+                job_batch_repository=job_batches,
             ),
             approved_application_service=approved_service,
             approved_application_worker=approved_worker,

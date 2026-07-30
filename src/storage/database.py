@@ -26,6 +26,9 @@ from src.storage.v04_migration import add_v04_schema
 from src.storage.v05_migration import add_v05_schema
 from src.storage.v06_migration import add_v06_schema
 from src.storage.v07_migration import add_v07_schema
+from src.storage.v08_migration import add_v08_schema
+from src.storage.v09_migration import add_v09_schema
+from src.storage.v10_migration import add_v10_schema
 
 
 def _mark_legacy_schema(_conn: sqlite3.Connection) -> None:
@@ -125,6 +128,21 @@ class Database:
                     7,
                     "v0.7 job batch schema",
                     add_v07_schema,
+                ),
+                Migration(
+                    8,
+                    "v0.8 agent work protocol",
+                    add_v08_schema,
+                ),
+                Migration(
+                    9,
+                    "repair v0.8 agent work metadata",
+                    add_v09_schema,
+                ),
+                Migration(
+                    10,
+                    "v0.9 parallel evaluation pool",
+                    add_v10_schema,
                 ),
             ]
         )

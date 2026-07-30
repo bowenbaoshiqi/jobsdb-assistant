@@ -174,7 +174,13 @@ class DashboardQueryService:
             location=None if listing is None else listing.location,
             canonical_url=snapshot.canonical_url,
             apply_type=snapshot.apply_type,
-            jd_text=snapshot.jd_text,
+            jd_text=(
+                evaluation.jd_translation_zh_cn
+                or snapshot.jd_text
+            ),
+            jd_translation_available=(
+                evaluation.jd_translation_zh_cn is not None
+            ),
             evaluation_status="evaluated",
             overall_score=evaluation.overall_score,
             dimensions=[

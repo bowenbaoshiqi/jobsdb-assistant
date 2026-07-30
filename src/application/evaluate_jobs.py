@@ -2,6 +2,7 @@
 
 import json
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Protocol
 
@@ -135,6 +136,8 @@ class EvaluationService:
         if len(results) != 1:
             raise ValueError("one-job task must return one evaluation")
         result = results[0]
+        if result.created_at is None:
+            result = result.model_copy(update={"created_at": datetime.now(UTC)})
         self.evaluations.save(result, pending.cache_key)
         return result
 

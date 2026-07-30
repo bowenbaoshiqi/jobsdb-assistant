@@ -86,6 +86,7 @@ class DashboardJob(BaseModel):
     canonical_url: str
     apply_type: ApplyType
     jd_text: str
+    jd_translation_available: bool = False
     evaluation_status: Literal["evaluated", "pending"]
     overall_score: float | None = None
     dimensions: list[DashboardDimension] = Field(default_factory=list)

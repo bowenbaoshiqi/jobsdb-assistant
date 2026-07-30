@@ -61,3 +61,15 @@ def test_claim_next_returns_none_when_queue_is_drained(tmp_path) -> None:
     store.mark("task-1", EvaluationTaskStatus.COMPLETED)
 
     assert store.claim_next() is None
+
+
+def test_requeue_if_running_does_not_move_terminal_task_backwards(tmp_path) -> None:
+    now = datetime.now(UTC)
+    store = EvaluationProgressStore(tmp_path / "progress.json")
+    store.start(["task-1"], now=now)
+    store.mark("task-1", EvaluationTaskStatus.COMPLETED)
+
+    store.requeue_if_running("task-1")
+
+    assert store.get().completed == 1
+    assert store.get().queued == 0

@@ -8,14 +8,17 @@ from fastapi.testclient import TestClient
 
 from src.dashboard.app import DashboardDependencies, create_dashboard_app
 from src.dashboard.application_service import DashboardApplicationService
-from src.dashboard.evaluation_progress import EvaluationProgressStore
+from src.dashboard.evaluation_progress import EvaluationProgressStore, EvaluationTaskStatus
 from src.dashboard.query_service import DashboardQueryService
+from src.domain.agent_work import AgentWorkKind
 from src.domain.application_execution import (
     ApplicationExecution,
     ApplicationExecutionStatus,
     ApplicationIdentity,
 )
 from src.domain.job import ApplyType, JobDetailCapture
+from src.storage.agent_pool_repository import AgentPoolRepository
+from src.storage.agent_work_repository import AgentWorkRepository
 from src.storage.database import Database
 from src.storage.job_batch_repository import JobBatchRepository
 from src.storage.selection_repository import SelectionRepository
@@ -114,7 +117,7 @@ def test_health_is_ready(
     assert client.get("/health").json() == {
         "status": "ok",
         "database": "ready",
-        "dashboard_version": "0.6.0",
+        "dashboard_version": "0.8.0",
     }
 
 
@@ -145,6 +148,39 @@ def test_evaluation_progress_endpoint_reports_current_batch(
     assert response.json()["status"] == "active"
     assert response.json()["total"] == 2
     assert response.json()["queued"] == 2
+
+
+def test_evaluation_progress_prefers_sqlite_pool_state_over_legacy_json(
+    dashboard_api: tuple[TestClient, AsyncMock],
+) -> None:
+    client, _runner = dashboard_api
+    dependencies = client.app.state.dashboard_dependencies
+    store = dependencies.evaluation_progress
+    store.start(["task-1"], now=NOW)
+    store.mark("task-1", EvaluationTaskStatus.RUNNING)
+    work = AgentWorkRepository(dependencies.database)
+    session = work.start_session(now=NOW)
+    record = work.enqueue(
+        kind=AgentWorkKind.JOB_EVALUATION,
+        internal_key="evaluation:task-1",
+        task_path="/private/task-1.json",
+        result_path="/private/result-1.json",
+        capability_paths=("/private/capability.md",),
+        now=NOW,
+    )
+    AgentPoolRepository(dependencies.database).start_pool(
+        session_id=session.id,
+        batch_key="batch-1",
+        assignments=((record.id, 1, 1),),
+        capability_context_id="cap-v1",
+        profile_context_id="profile-v1",
+        now=NOW,
+    )
+    response = client.get("/api/evaluation-progress")
+
+    assert response.status_code == 200
+    assert response.json()["queued"] == 1
+    assert response.json()["running"] == 0
 
 
 def test_archive_current_batch_and_start_next_discovery(

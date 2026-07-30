@@ -1,299 +1,175 @@
 ---
 name: jobsdb-assistant
-description: Run the local JobsDB Hong Kong candidate-profile, job-evaluation, and review Dashboard workflow. Use when the user asks to initialize or update their candidate profile, discover JobsDB roles for one keyword, score current roles with native career-ops A-F evaluation, generate the local evaluation report, or open the local review Dashboard. Keep the current Codex or compatible agent session active until Python reports completion.
+description: Start and continuously run the complete local JobsDB Hong Kong workflow from Codex or another compatible Agent. Use for candidate onboarding, Dashboard-driven job discovery, Career Ops scoring with full Simplified Chinese JD translation, tailored application materials, workflow recovery, or keeping the local assistant active until the user explicitly stops it.
 ---
 
-# JobsDB Candidate, Evaluation, Material, and Application Workflow
+# Run JobsDB Assistant
 
-Python and SQLite are the state authority. Do not choose or skip workflow
-stages. Do not modify either integration checkout.
+Use only the versioned Python Agent protocol. Python and SQLite own workflow
+order, state, retries, and identity. Treat `session` and `work_id` as opaque:
+copy them exactly and never construct, parse, or substitute them.
 
-## 1. Prepare the candidate profile
+## Start once
 
-Choose one run ID and reuse it for the whole session.
-
-```bash
-uv run python -m src.main workflow profile-prepare \
-  --run-id RUN_ID \
-  --source PATH
-```
-
-Omit `--source` for an interview-only first run. Add `--update` only when the
-user explicitly requests a new profile version.
-
-If status is `ready`, continue to discovery. If status is
-`waiting_for_agent`:
-
-1. Read `workspace/ai-tasks/<task_id>/task.json`.
-2. Read only its `capability_paths` below
-   `integrations/candidate-profile/`.
-3. Read only the listed local source documents.
-4. Inspect `interview_complete` in the task. When it is `false`, return
-   `questions`; a proposal is forbidden. Questions must cover every required
-   dimension exactly once using the typed objects described below.
-5. When `interview_complete` is `true`, return a `proposal` matching the task
-   schema. It must include a complete evidence-backed `canonical_cv` and
-   exactly one `intent_syntheses` item for every typed answer. Bind each item
-   to the exact task answer with its SHA-256 `answer_hash`; use the same
-   dimension for `dimension` and `target_field`.
-6. Save it to `workspace/ai-tasks/<task_id>/agent-result.json`.
-7. Submit it:
+From the repository root run:
 
 ```bash
-uv run python -m src.main workflow profile-submit \
-  --run-id RUN_ID \
-  --task-id TASK_ID \
-  --result workspace/ai-tasks/TASK_ID/agent-result.json
+uv run jobsdb-assistant agent doctor
+uv run jobsdb-assistant agent start
 ```
 
-The first task's `questions` result must contain exactly these dimensions:
+When the user supplies one or more resume/profile files, repeat
+`--source ABSOLUTE_PATH` on `agent start`. Add `--update-profile` only when the
+user explicitly asks to replace the confirmed profile. Do not invent a
+`run_id`, inspect source code to discover commands, scan task directories, or
+query SQLite.
 
-```text
-behavioral_style
-career_goals
-next_role_motivators
-must_haves
-deal_breakers
-salary_expectations
-references
-```
+`agent start` reuses durable work when possible and returns the exact session
+plus the local Dashboard URL. Tell the user the URL, then remain in the work
+loop. The user may archive/search batches and request materials entirely from
+the Dashboard.
 
-Use one object per dimension with `dimension`, a concise candidate-aware
-`prompt`, and `optional`. Only `salary_expectations` and `references` have
-`optional: true`.
+## Work loop
 
-When Python returns questions, ask the user conversationally. Save a JSON
-object keyed by dimension. Each value uses `status: answered` plus a non-empty
-`value`, or the explicit skip status `not_provided` / `no_preference`:
-
-```json
-{
-  "career_goals": {
-    "status": "answered",
-    "value": "Enterprise AI architecture leadership"
-  },
-  "salary_expectations": {
-    "status": "not_provided"
-  }
-}
-```
-
-Include every required dimension, then run:
+Run the persistent listener:
 
 ```bash
-uv run python -m src.main workflow profile-answers \
-  --run-id RUN_ID \
-  --answers workspace/ai-tasks/profile-answers.json \
-  --source PATH
+uv run jobsdb-assistant agent listen --session SESSION
 ```
 
-Service the returned task in the same way. When Python returns a proposal,
-show it to the user. Only after explicit approval run:
+The command deliberately does not return while the queue is temporarily empty.
+If the tool surface yields a running process handle, keep polling that same
+process instead of starting another listener. Handle exactly the returned
+state:
+
+- `claimed`: read only `task_path` and the listed `capability_paths`. Reuse
+  already loaded capability context when its path and pinned SHA are unchanged
+  in this Agent turn. Produce schema-valid JSON at the exact `result_path`,
+  then run:
+
+  ```bash
+  uv run jobsdb-assistant agent submit \
+    --session SESSION --work-id WORK_ID --result RESULT_PATH
+  ```
+
+- `human_required`: read the exact `prompt_path`, ask only for the declared
+  human decision or answers, write the response to the exact `response_path`,
+  and submit it with the same `agent submit` command. Never infer approval
+  from silence.
+- recoverable task error: write a concise sanitized error file and run:
+
+  ```bash
+  uv run jobsdb-assistant agent fail \
+    --session SESSION --work-id WORK_ID --error ERROR_PATH
+  ```
+
+  Continue the loop so one failed job does not block unrelated work.
+- `failed`: report the exact sanitized blocker and required user action.
+- `stopped`: report the final durable counts and end.
+
+After every submit or fail, immediately run `agent listen` again. `agent next`
+is a one-shot diagnostic command only: idle is not completion. Never send a final response
+merely because a queue is temporarily empty. Continue until the user explicitly
+says to stop, then run:
 
 ```bash
-uv run python -m src.main workflow profile-confirm \
-  --proposal-id PROPOSAL_ID
+uv run jobsdb-assistant agent stop --session SESSION
 ```
 
-Never invent candidate facts or interview answers. Every factual leaf in
-`canonical_cv` requires source evidence. Never convert silence into a
-preference. Python injects its saved raw answers into the proposal after
-validation; Agent output cannot replace or omit them.
-
-## 2. Discover JobsDB roles
-
-Ask for one keyword if none was supplied. Location remains Hong Kong.
-Discovery uses the public JobsDB pages. It never requires an account, login,
-email, password, or `JOBSDB_EMAIL` / `JOBSDB_PASSWORD`. Do not ask the user to
-configure credentials for this stage.
+Before reporting normal completion, run the read-only terminal guard:
 
 ```bash
-uv run python -m src.main discover --keyword "KEYWORD"
+uv run jobsdb-assistant agent status --session SESSION
 ```
 
-Discovery itself never applies to jobs.
+`claimed > 0` or `queued > 0` means the workflow is not complete. A claimed
+envelope must end with `agent submit`, `agent fail`, or an explicit
+`agent stop`; never end the Agent turn while it is still claimed. Do not repair
+state by editing the Dashboard progress file or by reading SQLite. If the
+client turn disappears, the next `agent start`, `listen`, or `next` performs
+lease recovery.
 
-## 3. Prepare and service evaluations
+## Evaluation default: one Agent
+
+When the current batch contains `job_evaluation` work, use the normal single
+Agent listener. Claim one JD, complete its Career Ops evaluation, submit it,
+and immediately listen again. This is the default because it avoids worker
+startup, context duplication, and coordination overhead for the normal 15-job
+batch:
 
 ```bash
-uv run python -m src.main workflow evaluation-prepare --run-id RUN_ID
+uv run jobsdb-assistant agent listen --session SESSION
 ```
 
-For every pending task:
+Do not start a pool for the normal workflow. The pool remains an explicit
+experimental option for benchmark runs only:
 
-1. Read `workspace/ai-tasks/<task_id>/task.json`.
-2. Read only its `capability_paths` below
-   `integrations/job-evaluation/`.
-3. Read exactly the three private files listed by
-   `profile_context_paths`. Load the career-ops context in this order:
-   `config/profile.yml → modes/_shared.md → modes/_profile.md → modes/oferta.md → cv.md`.
-   The `_shared.md` and `oferta.md` files come from the pinned integration;
-   the other three come from the immutable private bundle.
-4. Run career-ops evaluation-only reasoning against that native candidate
-   context and the single JD.
-5. Preserve native ordered A-F blocks and the native 1.0–5.0 overall score.
-6. Save schema-valid JSON to
-   `workspace/ai-tasks/<task_id>/agent-result.json`.
-7. Submit it:
+### Optional experimental three-worker pool
+
+Only use this section when the user explicitly requests a parallel benchmark:
 
 ```bash
-uv run python -m src.main workflow evaluation-submit \
-  --task-id TASK_ID \
-  --result workspace/ai-tasks/TASK_ID/agent-result.json
+uv run jobsdb-assistant agent pool start --session SESSION
+uv run jobsdb-assistant agent pool ready --session SESSION --pool POOL \
+  --slot SLOT --capability-context CAPABILITY_CONTEXT \
+  --profile-context PROFILE_CONTEXT
+uv run jobsdb-assistant agent pool claim --session SESSION --pool POOL --slot SLOT
+uv run jobsdb-assistant agent pool heartbeat --session SESSION --pool POOL \
+  --live-slot SLOT
+uv run jobsdb-assistant agent pool status --session SESSION --pool POOL
 ```
 
-Never recreate, edit, or copy the profile bundle. Do not combine scores with
-ai-job-search, add weights, convert to percentages, generate application
-materials, or control browser application execution.
-Continue other tasks if one result is rejected; report the rejected task ID
-and Python validation error.
+The pool must report `requested_concurrency=3` and exactly three returned slot
+tokens. Create exactly three top-level workers—one per returned slot—then load
+only the declared pinned capability and profile context before calling
+`agent pool ready` for all three. Do not claim any work until all slots are
+ready. Each worker handles one JD at a time and is reused for at most five JDs;
+after five, or after a context hash mismatch, replace that worker in the same
+slot. The main Agent validates each result and performs `agent submit`; workers
+never submit directly.
 
-## 4. Generate the report
+Heartbeat live slots every 30 seconds. If a worker fails, stop heartbeating its
+slot and let Python requeue it after 90 seconds; replace the worker and retry once.
+Keep the other slots running. Never create nested workers, guess IDs,
+read SQLite, scan task directories, combine multiple JDs, or end while a pool
+or claimed work is active. Use `agent pool status` before reporting terminal
+completion, and call `agent pool stop` only on explicit user request.
 
-After all pending tasks have been submitted:
+## Claimed-work rules
 
-```bash
-uv run python -m src.main workflow report
-```
+The task schema and declared pinned capabilities define the AI work. Do not
+substitute a second scoring system or edit either integration checkout.
 
-Return the complete report and identify any failed task IDs. Do not expose
-full private source documents or raw task payloads.
+- Candidate work: use only supplied documents and explicit interview answers.
+  Never invent facts or turn a skipped answer into a preference. Present the
+  proposal at the Python-created confirmation gate.
+- Job evaluation: use Career Ops native ordered A-F reasoning and 1.0–5.0
+  score. Return a faithful full Simplified Chinese translation of every
+  captured JD section, including company information, responsibilities,
+  requirements, salary, benefits, and employment terms. Do not summarize or
+  omit sections.
+- Cover-letter-only material: produce one factual 100–300-word English cover
+  letter and no tailored resume sections.
+- Full material: tailor only `Professional Summary`, exactly four
+  `Career Highlights`, and exactly three `Core Competencies`, plus one factual
+  100–300-word English cover letter. Never modify Work Experience or anything
+  after it. Reviewer and ATS are advisory; factual consistency remains a
+  controlled review gate.
 
-## 5. Start the local review Dashboard
+## Human and application boundaries
 
-After discovery/evaluation, or whenever the user explicitly asks to review
-the current local results, run:
+The following always require the user:
 
-```bash
-uv run python -m src.main dashboard doctor
-uv run python -m src.main dashboard start
-```
+- candidate interview answers and profile confirmation;
+- material approval, rejection, regeneration, or factual-risk override;
+- Quick Apply Review and final submission confirmation;
+- JobsDB login, 验证码, or uncertain submission handling;
+- every external-site Apply submission.
 
-Keep the foreground Agent session active until the user stops the service or
-the command exits. Report the local `127.0.0.1` address. Do not replace the
-foreground service with a detached schedule or a public/LAN binding.
+Keep listening while a Dashboard human gate is open because other independent
+work may arrive. Never call a Quick Apply preparation/confirmation endpoint,
+approve materials, or confirm submission for the user.
 
-The Dashboard is the human approval surface. The Agent must not click or call the Quick Apply endpoint on the user's behalf and must not confirm submission for the user.
-A direct Quick Apply requires the user to use the Dashboard confirmation;
-that path uses the JobsDB default CV and no cover letter. It does not tailor
-a CV, generate a cover letter, or create a material task.
-
-An Apply job only opens its JobsDB details page for manual continuation.
-Never send an Apply job to browser automation. Keep the service running while
-the user reviews scoring evidence, changes filters, or selects
-`waiting_for_materials` jobs.
-
-When the user archives the current batch and starts another search from the
-Dashboard, do not end the Agent turn after starting the server. Python owns
-discovery and automatically creates evaluation tasks scoped to the new
-15-job-or-smaller batch. The Agent must complete this loop:
-
-1. Read `/api/job-batch` until the current status is `scoring`, `scored`, or
-   `failed`. Do not rerun discovery and do not call the global
-   `workflow evaluation-prepare` command.
-2. When status is `scoring`, read
-   the next current task through Python:
-   `uv run python -m src.main workflow evaluation-next`.
-   When it returns `claimed`, immediately service its `task_path`; this
-   durable claim changes the Dashboard state from queued to running. Never
-   scan every historical `workspace/ai-tasks` directory. Python owns the
-   current task map in `workspace/dashboard/evaluation-progress.json` and
-   claims only tasks whose status is `queued`.
-3. For each current task, follow Section 3's Career Ops loading order,
-   produce one schema-valid A-F result, and submit it through
-   `workflow evaluation-submit`.
-4. Continue after an individual validation failure and report its task ID.
-   Python updates Dashboard progress after every successful submission.
-5. Call `workflow evaluation-next` again after every submission. Stop the
-   scoring loop only when it returns `drained`,
-   `/api/evaluation-progress` reports no
-   queued or running tasks and `/api/job-batch` reports `scored`, or when the
-   batch reports `failed`.
-
-This is a hard completion gate: while any current task is queued or running,
-the Agent MUST NOT send a final response, describe a claimed task as
-completed work, or wait for another user message. Continue the claim,
-evaluate, submit loop in the same Agent turn. A concise commentary progress
-update is allowed, but it does not end the turn.
-
-Dashboard HTTP requests are state observation only. They do not authorize
-job selection, material approval, Quick Apply preparation, or submission.
-
-## 6. Service tailored-material tasks
-
-When the user creates a material batch in the Dashboard, remain in the
-current Agent session until every task reaches `generated` or `failed`.
-v0.6 application execution is available only through explicit user actions in
-the Dashboard; the Agent never invokes prepare or confirm endpoints.
-
-List work owned by Python:
-
-```bash
-uv run python -m src.main workflow material-pending
-```
-
-For every `waiting_for_agent` task:
-
-1. Read `workspace/ai-tasks/<task_id>/task.json`.
-2. Read only its `capability_paths` below
-   `integrations/candidate-profile/`. These are pinned files; never edit them.
-3. Read the task's three `profile_context_paths`, single JD, and native A-F
-   evaluation. Treat the confirmed profile and source CV as the only factual
-   sources.
-4. Branch only on the task's `material_mode`:
-   - `cover_letter_only`: produce only a 100–300-word English cover letter.
-     Do not generate `tailored_sections` or a PDF.
-   - `tailored_resume_and_cover_letter`: produce `Professional Summary`,
-     exactly four `Career Highlights`, exactly three `Core Competencies`,
-     and a 100–300-word English cover letter. Python alone renders the PDF
-     from the fixed v5 template.
-   Never rewrite Work Experience or any later section and never return an
-   Agent-created PDF.
-5. Run Reviewer, ATS, and factual checks in that exact order. Reviewer and
-   ATS are advisory. Report check and change summaries in Simplified Chinese.
-6. Write a schema-valid result matching the task identity to
-   `workspace/ai-tasks/<task_id>/agent-result.json`. Always copy the task's
-   `material_mode` into the result unchanged.
-7. Submit only through Python:
-
-```bash
-uv run python -m src.main workflow material-submit \
-  --task-id TASK_ID \
-  --result workspace/ai-tasks/TASK_ID/agent-result.json
-```
-
-If one result fails validation, report its task ID and error, then continue other material tasks.
-Never invent experience, dates, titles, employers,
-skills, metrics, team sizes, education, or outcomes. Do not approve, reject,
-regenerate, or submit materials on the user's behalf.
-
-After each task, and once at the end, report durable progress:
-
-```bash
-uv run python -m src.main workflow material-progress --batch-id BATCH_ID
-```
-
-The first profile workflow installs missing pinned integrations only on a
-genuine first run. On later runs, reuse the existing locked checkouts and
-immutable confirmed profile unless the user explicitly requests an update.
-
-## 7. Approved application execution
-
-Keep `dashboard start` in the foreground. After the user approves materials,
-Python owns the v0.6 application execution state, remote resume replacement,
-exact filename verification, cover-letter entry, and browser flow.
-
-- For Quick Apply, the user clicks prepare. `cover_letter_only` keeps the
-  JobsDB default resume and skips all remote resume management.
-  `tailored_resume_and_cover_letter` preserves the default resume, removes
-  other non-default resumes, uploads the approved job-specific PDF, and
-  selects it. Both modes fill the approved cover letter and stop at Review.
-- The user must inspect Review and click confirm submission. The Agent must
-  not confirm submission, call the endpoint, or simulate that approval.
-- For Apply, the Dashboard copies the approved cover letter and opens the
-  JobsDB detail URL. Full mode also downloads the approved PDF; cover-only
-  mode keeps the JobsDB default resume. External employer-site submission
-  remains manual.
-- Keep the Agent and Dashboard process alive until work finishes or the user
-  stops it. Report durable states and intervention errors without retrying an
-  uncertain submission.
+All candidate data, tasks, JD content, materials, cookies, logs, and browser
+profiles remain in ignored local runtime paths. Never commit or print complete
+private source documents.

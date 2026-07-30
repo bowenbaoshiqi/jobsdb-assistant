@@ -13,6 +13,7 @@ from src.domain.material import MaterialMode, MaterialReviewAction
 from src.storage.candidate_repository import CandidateRepository
 from src.storage.database import Database
 from src.storage.evaluation_repository import EvaluationRepository
+from src.storage.job_batch_repository import JobBatchRepository
 from src.storage.material_repository import MaterialRepository
 from src.storage.selection_repository import SelectionRepository
 
@@ -25,6 +26,7 @@ class DashboardMaterialService:
         repository: MaterialRepository,
         generation: MaterialGenerationService,
         materials_root: Path,
+        job_batch_repository: JobBatchRepository | None = None,
         now: Callable[[], datetime] | None = None,
     ) -> None:
         self.database = database
@@ -35,6 +37,7 @@ class DashboardMaterialService:
         self.selections = SelectionRepository(database)
         self.profiles = CandidateRepository(database)
         self.evaluations = EvaluationRepository(database)
+        self.job_batches = job_batch_repository
 
     def create_batch(
         self,
@@ -43,6 +46,13 @@ class DashboardMaterialService:
         ),
     ):
         selected = self.selections.list_selected()
+        if self.job_batches is not None:
+            current_job_ids = set(self.job_batches.current_job_ids())
+            selected = {
+                job_id: item
+                for job_id, item in selected.items()
+                if job_id in current_job_ids
+            }
         if not selected:
             raise ValueError("at least one selected job is required")
         profile = self.profiles.get_active()
