@@ -21,6 +21,8 @@ def test_both_skills_use_only_unified_agent_commands() -> None:
         assert "agent listen" in text
         assert "agent next" in text
         assert "agent submit" in text
+        assert "Evaluation default: one Agent" in text
+        assert "Do not start a pool for the normal workflow" in text
         assert "agent pool start" in text
         assert "agent pool ready" in text
         assert "agent pool claim" in text

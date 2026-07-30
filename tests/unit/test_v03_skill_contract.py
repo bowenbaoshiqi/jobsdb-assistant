@@ -20,6 +20,8 @@ def test_skill_uses_python_as_state_authority(path: Path) -> None:
     assert "agent submit" in text
     assert "agent fail" in text
     assert "agent stop" in text
+    assert "Evaluation default: one Agent" in text
+    assert "Do not start a pool for the normal workflow" in text
     assert "agent pool start" in text
     assert "agent pool ready" in text
     assert "agent pool claim" in text

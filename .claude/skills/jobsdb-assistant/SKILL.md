@@ -76,10 +76,24 @@ state by editing the Dashboard progress file or by reading SQLite. If the
 client turn disappears, the next `agent start`, `listen`, or `next` performs
 lease recovery.
 
-## Three-worker evaluation pool
+## Evaluation default: one Agent
 
-When the current batch contains `job_evaluation` work, use the pool protocol;
-do not claim those jobs through the single-worker listener:
+When the current batch contains `job_evaluation` work, use the normal single
+Agent listener. Claim one JD, complete its Career Ops evaluation, submit it,
+and immediately listen again. This is the default because it avoids worker
+startup, context duplication, and coordination overhead for the normal 15-job
+batch:
+
+```bash
+uv run jobsdb-assistant agent listen --session SESSION
+```
+
+Do not start a pool for the normal workflow. The pool remains an explicit
+experimental option for benchmark runs only:
+
+### Optional experimental three-worker pool
+
+Only use this section when the user explicitly requests a parallel benchmark:
 
 ```bash
 uv run jobsdb-assistant agent pool start --session SESSION
